@@ -51,8 +51,9 @@ GitHub release.
 ## Before the first release
 
 A consuming root project can declare the GitHub VCS repository and require
-`ran/updater-support` using `dev-main#<reviewed-full-commit-sha>`. Commit the root
-project's lockfile and explicitly allow that development dependency. Composer
+`ran/updater-support` using `dev-main`. Commit the root project's lockfile, verify its source reference
+against the reviewed full commit SHA, and explicitly allow that development
+dependency. Composer
 repository declarations are root-only and are not inherited from dependencies.
 Replace the development pin with an owner-approved beta tag after publication.
 There is no claimed `0.1.0` release and no local path repository requirement.
