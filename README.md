@@ -70,3 +70,10 @@ bootstrap, not an available version.
 
 See [RELEASING.md](RELEASING.md) for the independent beta release process and
 installation before the first release.
+
+## Community
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a change. Use
+[SUPPORT.md](SUPPORT.md) for non-sensitive support and
+[SECURITY.md](SECURITY.md) for confidential vulnerability reports. Participation
+is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
