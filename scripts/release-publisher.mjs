@@ -4,8 +4,6 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PublisherRefusal, candidateIdentity, manifestVersion, refuse, verifyReleaseDelta } from "./release-publisher-content.mjs";
 import {
-  PENDING_LABEL,
-  TAGGED_LABEL,
   decidePublication,
   hydrateExactReleasePullTree as hydrateReleasePullTree,
   labels,
@@ -15,6 +13,8 @@ import {
 export { PublisherRefusal, candidateIdentity, decidePublication, verifyPublishedState, verifyReleaseDelta };
 const FULL_SHA = /^[a-f0-9]{40}$/;
 const REPOSITORY = "RocketsAreNostalgic/ran-updater-support";
+const PENDING_LABEL = "autorelease: pending";
+const TAGGED_LABEL = "autorelease: tagged";
 const API_VERSION = "2022-11-28";
 const IMMUTABLE_RELEASES_API_VERSION = "2026-03-10";
 
