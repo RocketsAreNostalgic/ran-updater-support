@@ -9,4 +9,5 @@ Source: https://github.com/addyosmani/agent-skills/tree/main/skills/code-review-
 
 Use the upstream `code-review-and-quality` skill when reviewing changes in this repository. Apply its five-axis review across correctness, readability and simplicity, architecture, security, and performance. Review tests first, categorize findings by severity, verify the verification story, check for dead code after refactors, and apply dependency discipline before approving changes.
 
-For the complete skill instructions, use the upstream SKILL.md linked above.
+This repository uses the condensed guidance in this file; the upstream link is
+reference provenance only and is not required at runtime.
