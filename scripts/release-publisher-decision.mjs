@@ -3,8 +3,8 @@ import { BETA, refuse } from "./release-publisher-content.mjs";
 const FULL_SHA = /^[a-f0-9]{40}$/;
 const RELEASE_BRANCH = "release-please--branches--main--components--ran/updater-support";
 const RELEASE_PATHS = [".release-please-manifest.json", "CHANGELOG.md"];
-const PENDING_LABEL = "autorelease: pending";
-const TAGGED_LABEL = "autorelease: tagged";
+export const PENDING_LABEL = "autorelease: pending";
+export const TAGGED_LABEL = "autorelease: tagged";
 const BOT_LOGIN = "github-actions[bot]";
 
 export function labels(pull) {
