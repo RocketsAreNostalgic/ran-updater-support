@@ -36,7 +36,7 @@
     "validate:strict": "composer validate --strict --no-check-publish",
     "test:contract": "php tests/contract.php",
     "lint:php": "find src tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l",
-    "standards": "phpcs --standard=.phpcs.xml --report=summary",
+    "standards": "phpcs --standard=.phpcs.xml",
     "standards:fix": "phpcbf --standard=.phpcs.xml --report=summary",
     "analyze": "phpstan analyse --configuration=phpstan.neon --no-progress --memory-limit=512M",
     "test:release-publisher": "node --test tests/release-publisher.test.mjs tests/release-publisher-decision.test.mjs"
