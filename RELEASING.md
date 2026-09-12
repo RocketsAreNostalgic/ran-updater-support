@@ -21,8 +21,10 @@ The variable acknowledges that setting; it does not enable it.
 ## Prepare and publish
 
 1. Merge reviewed Conventional Commits through the normal PR process. CI runs
-   Composer validation, PHP contract tests and lint, and publisher tests. A
-   successful same-repository main push starts Release Please.
+   strict Composer validation, PHP syntax lint, the shared RAN
+   PHPCS/PHPCompatibility standards, PHPStan, package contract tests, and
+   publisher tests. A successful same-repository main push starts Release
+   Please.
 2. Release Please opens a version PR. Approve its Actions workflow run if GitHub
    requires approval for the bot-created PR; `CI` also supports manual dispatch
    against the exact PR branch. Review the version and complete changelog diff.

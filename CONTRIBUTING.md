@@ -12,10 +12,12 @@ composer install --no-interaction --prefer-dist
 composer check
 ```
 
-`composer check` validates Composer metadata, runs the archive-safety contract
-corpus, runs the release-publisher tests, and lints PHP. Add focused contract
-coverage when changing a public rule. See [RELEASING.md](RELEASING.md) before
-changing release automation or preparing a release.
+`composer check` validates Composer metadata, lints PHP syntax, runs the shared
+RAN PHPCS/PHPCompatibility standards, runs PHPStan over production code, runs
+the archive-safety contract corpus, and runs the release-publisher tests. Add
+focused contract coverage when changing a public rule. See
+[RELEASING.md](RELEASING.md) before changing release automation or preparing a
+release.
 
 Do not commit credentials, tokens, private repository details, archives,
 temporary files, logs, `vendor`, or dependency caches. Use ordinary issues for

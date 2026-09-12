@@ -3,8 +3,21 @@
   "description": "Shared contracts and utilities for RAN updater packages.",
   "type": "library",
   "license": "GPL-2.0-or-later",
+  "repositories": [
+    {
+      "type": "vcs",
+      "url": "https://github.com/RocketsAreNostalgic/ran-coding-standards.git"
+    }
+  ],
   "require": {
     "php": "^8.2"
+  },
+  "require-dev": {
+    "phpcompatibility/php-compatibility": "10.0.0-alpha2",
+    "phpcompatibility/phpcompatibility-paragonie": "2.0.0-alpha2",
+    "phpcompatibility/phpcompatibility-wp": "3.0.0-alpha2",
+    "phpstan/phpstan": "^2.1",
+    "ran/coding-standards": "dev-main"
   },
   "autoload": {
     "psr-4": {
@@ -14,18 +27,26 @@
   "scripts": {
     "check": [
       "@validate:strict",
+      "@lint:php",
+      "@standards",
+      "@analyze",
       "@test:contract",
-      "@test:release-publisher",
-      "@lint:php"
+      "@test:release-publisher"
     ],
     "validate:strict": "composer validate --strict --no-check-publish",
     "test:contract": "php tests/contract.php",
     "lint:php": "find src tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l",
+    "standards": "phpcs --standard=.phpcs.xml",
+    "standards:fix": "phpcbf --standard=.phpcs.xml --report=summary",
+    "analyze": "phpstan analyse --configuration=phpstan.neon --no-progress --memory-limit=512M",
     "test:release-publisher": "node --test tests/release-publisher.test.mjs tests/release-publisher-decision.test.mjs"
   },
   "config": {
     "platform": {
       "php": "8.2.0"
+    },
+    "allow-plugins": {
+      "dealerdirect/phpcodesniffer-composer-installer": true
     },
     "sort-packages": true
   },

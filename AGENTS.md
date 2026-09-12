@@ -4,7 +4,23 @@ This is the independent `ran/updater-support` Composer library. Keep committed
 files suitable for public distribution. Shared utilities need concrete consumers
 with equivalent behavior; keep updater orchestration in its owning package.
 
+## RAN quality profile
+
+This repository uses the RAN `php-library` quality profile. PHP coding and
+compatibility ancestry comes from `ran/coding-standards` through
+`RANWordPressLibrary`; the tracked Composer lock binds the reviewed candidate
+revision until the shared package receives its first versioned release.
+
+Keep package identity and applicability local: the `RAN\UpdaterSupport\V1`
+namespace, PHP `^8.2` support range, source paths, tests, and any future narrow
+exceptions belong in this repository. Do not copy shared rules back into local
+configuration and do not add a WordPress-version floor unless this package
+actually claims one.
+
 - Run `composer check` before committing and retain consumer contract fixtures.
+- `composer check` must retain strict manifest validation, PHP syntax lint,
+  shared PHPCS/PHPCompatibility checks, PHPStan, and the package's existing
+  contract/release-publisher tests.
 - Preserve the `RAN\UpdaterSupport\V1` public namespace and independent beta line.
 - Before changing release automation or preparing a release, read `RELEASING.md`.
 - Every pull request needs independent review against its exact base/head SHAs.
