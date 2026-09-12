@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<ruleset name="RAN Updater Support Coding Standards">
+	<description>Shared RAN WordPress-library coding and PHP compatibility baseline for updater support.</description>
+
+	<config name="testVersion" value="8.2-"/>
+
+	<file>.</file>
+	<exclude-pattern>/vendor/</exclude-pattern>
+	<exclude-pattern>/node_modules/</exclude-pattern>
+
+	<arg name="basepath" value="."/>
+	<arg name="colors"/>
+	<arg name="extensions" value="php"/>
+	<arg name="parallel" value="4"/>
+	<arg value="sp"/>
+
+	<rule ref="RANWordPressLibrary"/>
+
+	<!-- The public helper API intentionally uses modern camelCase method/local names. -->
+	<rule ref="WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid">
+		<severity>0</severity>
+	</rule>
+	<rule ref="WordPress.NamingConventions.ValidVariableName">
+		<severity>0</severity>
+	</rule>
+
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<exclude-pattern>/tests/</exclude-pattern>
+		<properties>
+			<property name="prefixes" type="array">
+				<element value="ran_updater_support"/>
+				<element value="RAN\UpdaterSupport\V1"/>
+			</property>
+		</properties>
+	</rule>
+</ruleset>
