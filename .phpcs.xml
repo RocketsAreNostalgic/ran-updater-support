@@ -26,7 +26,7 @@
 		<properties>
 			<property name="prefixes" type="array">
 				<element value="ran_updater_support"/>
-				<element value="RAN\UpdaterSupport\V1\"/>
+				<element value="RAN\UpdaterSupport\V1"/>
 			</property>
 		</properties>
 	</rule>
