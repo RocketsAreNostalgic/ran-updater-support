@@ -6,22 +6,30 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
 jobs:
+  baseline:
+    uses: RocketsAreNostalgic/.github/.github/workflows/quality-php-library-v2.yml@788f783d2998994f7aab9691710911ed1bd762c9
+    with:
+      php-floor: '8.2'
+      php-current: '8.5'
+      php-extensions: zip
+      node-version: '24.11.0'
+
   quality:
-    runs-on: ubuntu-24.04
+    if: ${{ always() }}
+    needs: baseline
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
-        with:
-          php-version: '8.2'
-          coverage: none
-          extensions: zip
-          tools: composer:v2
-      - run: composer install --no-interaction --prefer-dist
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: '24.11.0'
-      - run: composer check
+      - name: Require normalized quality baseline
+        env:
+          BASELINE_RESULT: ${{ needs.baseline.result }}
+        run: |
+          printf 'baseline=%s\n' "$BASELINE_RESULT"
+          test "$BASELINE_RESULT" = success
