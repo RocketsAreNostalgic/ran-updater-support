@@ -22,6 +22,7 @@ export function validateHistoricalBeta1Recovery(input) {
     && input.event?.conclusion === "success"
     && input.event?.head_branch === "main"
     && input.event?.head_sha === input.currentSha
+    && Number.isInteger(input.repositoryId)
     && input.event?.head_repository?.id === input.repositoryId
     && input.event?.head_repository?.full_name === input.repository;
   if (!qualityExact) {
@@ -72,10 +73,12 @@ export function validateHistoricalBeta1Recovery(input) {
 
   if (input.release !== null) {
     verifyPublishedState(input.tagRef, input.release, input.identity);
-    if (!pullLabels.includes(PENDING_LABEL) && !pullLabels.includes(TAGGED_LABEL)) {
+    const pending = pullLabels.includes(PENDING_LABEL);
+    const tagged = pullLabels.includes(TAGGED_LABEL);
+    if (!pending && !tagged) {
       refuse("recovery_release_pr_label_conflict", "published recovery candidate has no lifecycle label");
     }
-    return { action: pullLabels.includes(TAGGED_LABEL) ? "already_published" : "reconcile_labels", pullNumber: h.pullNumber };
+    return { action: pending ? "reconcile_labels" : "already_published", pullNumber: h.pullNumber };
   }
   if (input.tagRef !== null) {
     refuse("recovery_partial_publication_state", "historical beta.1 tag exists without release");
