@@ -28,6 +28,9 @@ export function validateHistoricalBeta1Recovery(input) {
   if (!qualityExact) {
     refuse("recovery_quality_identity_invalid", "recovery requires exact successful same-repository main CI");
   }
+  if (input.mainSha !== input.currentSha) {
+    refuse("main_moved", "main no longer points at the successful recovery candidate");
+  }
   if (input.currentVersion !== h.version) {
     return { action: "none", reason: "historical_recovery_not_applicable" };
   }
