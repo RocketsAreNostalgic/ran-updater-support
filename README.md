@@ -71,8 +71,8 @@ release. A manifest version is therefore release-preparation state, not proof th
 that version is available to Composer consumers; published tags/releases are the
 availability boundary.
 
-See [RELEASING.md](RELEASING.md) for the independent beta release process,
-including recovery after a prepared release is not published.
+See [RELEASING.md](RELEASING.md) for the independent beta release process and
+fail-closed handling when a prepared release is not published.
 
 ## Community
 
