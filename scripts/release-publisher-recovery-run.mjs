@@ -29,6 +29,10 @@ export async function recoverHistoricalBeta1(root, event, repository, repository
     return { action: "none", reason: "historical_recovery_not_applicable" };
   }
 
+  if (!isAncestor(root, h.candidateSha, currentSha)) {
+    return { action: "none", reason: "historical_recovery_candidate_not_in_history" };
+  }
+
   const candidate = releaseContents(root, h.candidateSha);
   const identity = candidateIdentity(candidate, h.candidateSha);
   const [pullResponse, candidateCommitResponse, headCommitResponse, state] = await Promise.all([
@@ -47,7 +51,7 @@ export async function recoverHistoricalBeta1(root, event, repository, repository
     pull: pullResponse.data,
     candidateCommit: candidateCommitResponse.data,
     headCommit: headCommitResponse.data,
-    candidateIsAncestor: isAncestor(root, h.candidateSha, currentSha),
+    candidateIsAncestor: true,
     changedPaths: changedPaths(root, h.baseSha, h.candidateSha),
     delta: verifyReleaseDelta(releaseContents(root, h.baseSha), candidate),
     tagRef: state.tagRef,
