@@ -132,7 +132,7 @@ test("release delta permits only manifest version and a changelog prepend", () =
   );
 });
 
-test("only exact green CI normal merge and changed paths can publish", () => {
+test("only exact green CI merge and changed paths can publish", () => {
   const input = publicationInput();
   assert.deepEqual(decidePublication(input), { action: "create_release", pullNumber: 7 });
   refusal("release_paths_invalid", () =>
@@ -150,6 +150,18 @@ test("only exact green CI normal merge and changed paths can publish", () => {
       decidePublication({ ...input, commit: { ...input.commit, parentVersion } })
     );
   }
+});
+
+test("exact squash merge can publish", () => {
+  const input = publicationInput();
+  const squashCommit = {
+    ...input.commit,
+    parents: [input.commit.parents[0]],
+  };
+  assert.deepEqual(
+    decidePublication({ ...input, commit: squashCommit }),
+    { action: "create_release", pullNumber: 7 },
+  );
 });
 
 test("exact merged Release Please pull hydrates its head tree", async () => {
@@ -261,10 +273,10 @@ test("initial release must be exactly beta.1 and later releases must advance", (
   );
 });
 
-test("squash, rebase, extra parents, reversed parents and merge tree drift refuse publication", () => {
+test("rebase, missing/extra/reversed parents and merge tree drift refuse publication", () => {
   const input = publicationInput();
   for (const commit of [
-    { ...input.commit, parents: [input.commit.parents[0]] },
+    { ...input.commit, parents: [{ sha: "f".repeat(40) }] },
     { ...input.commit, parents: [] },
     { ...input.commit, parents: [...input.commit.parents, { sha: "f".repeat(40) }] },
     { ...input.commit, parents: input.commit.parents.toReversed() },
