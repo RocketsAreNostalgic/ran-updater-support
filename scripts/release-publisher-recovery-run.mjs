@@ -14,32 +14,45 @@ function isAncestor(root, ancestor, descendant) {
   }
 }
 
-async function reconcileLabels(repository, pull) {
+const production = {
+  api,
+  candidateIdentity,
+  changedPaths,
+  createImmutableRelease,
+  isAncestor,
+  manifestVersion,
+  releaseContents,
+  remoteState,
+  verifyReleaseDelta,
+};
+
+async function reconcileLabels(repository, pull, request) {
   if (!labels(pull).includes("autorelease: tagged")) {
-    await api(`/repos/${repository}/issues/${h.pullNumber}/labels`, { method: "POST", body: { labels: ["autorelease: tagged"] } });
+    await request(`/repos/${repository}/issues/${h.pullNumber}/labels`, { method: "POST", body: { labels: ["autorelease: tagged"] } });
   }
   if (labels(pull).includes("autorelease: pending")) {
-    await api(`/repos/${repository}/issues/${h.pullNumber}/labels/${encodeURIComponent("autorelease: pending")}`, { method: "DELETE", allow404: true });
+    await request(`/repos/${repository}/issues/${h.pullNumber}/labels/${encodeURIComponent("autorelease: pending")}`, { method: "DELETE", allow404: true });
   }
 }
 
-export async function recoverHistoricalBeta1(root, event, repository, repositoryId, currentSha) {
-  const currentVersion = manifestVersion(releaseContents(root, currentSha).manifest, "current recovery candidate", true);
+export async function recoverHistoricalBeta1(root, event, repository, repositoryId, currentSha, overrides = {}) {
+  const deps = { ...production, ...overrides };
+  const currentVersion = deps.manifestVersion(deps.releaseContents(root, currentSha).manifest, "current recovery candidate", true);
   if (currentVersion !== h.version) {
     return { action: "none", reason: "historical_recovery_not_applicable" };
   }
 
-  if (!isAncestor(root, h.candidateSha, currentSha)) {
+  if (!deps.isAncestor(root, h.candidateSha, currentSha)) {
     return { action: "none", reason: "historical_recovery_candidate_not_in_history" };
   }
 
-  const candidate = releaseContents(root, h.candidateSha);
-  const identity = candidateIdentity(candidate, h.candidateSha);
+  const candidate = deps.releaseContents(root, h.candidateSha);
+  const identity = deps.candidateIdentity(candidate, h.candidateSha);
   const [pullResponse, candidateCommitResponse, headCommitResponse, state] = await Promise.all([
-    api(`/repos/${repository}/pulls/${h.pullNumber}`),
-    api(`/repos/${repository}/git/commits/${h.candidateSha}`),
-    api(`/repos/${repository}/git/commits/${h.headSha}`),
-    remoteState(repository, h.tag),
+    deps.api(`/repos/${repository}/pulls/${h.pullNumber}`),
+    deps.api(`/repos/${repository}/git/commits/${h.candidateSha}`),
+    deps.api(`/repos/${repository}/git/commits/${h.headSha}`),
+    deps.remoteState(repository, h.tag),
   ]);
   let input = {
     event,
@@ -52,8 +65,8 @@ export async function recoverHistoricalBeta1(root, event, repository, repository
     candidateCommit: candidateCommitResponse.data,
     headCommit: headCommitResponse.data,
     candidateIsAncestor: true,
-    changedPaths: changedPaths(root, h.baseSha, h.candidateSha),
-    delta: verifyReleaseDelta(releaseContents(root, h.baseSha), candidate),
+    changedPaths: deps.changedPaths(root, h.baseSha, h.candidateSha),
+    delta: deps.verifyReleaseDelta(deps.releaseContents(root, h.baseSha), candidate),
     tagRef: state.tagRef,
     release: state.release,
     immutableReleasesEnabled: state.release === null
@@ -69,20 +82,43 @@ export async function recoverHistoricalBeta1(root, event, repository, repository
   }
 
   if (result.action === "create_release") {
-    const fresh = await remoteState(repository, h.tag);
+    const fresh = await deps.remoteState(repository, h.tag);
     input = { ...input, tagRef: fresh.tagRef, release: fresh.release };
     result = validateHistoricalBeta1Recovery(input);
     if (result.action === "create_release") {
-      await createImmutableRelease(repository, identity);
+      await deps.createImmutableRelease(repository, identity);
     }
   }
 
-  if (result.action === "create_release" || result.action === "reconcile_labels") {
-    await reconcileLabels(repository, (await api(`/repos/${repository}/pulls/${h.pullNumber}`)).data);
+  const checked = await deps.remoteState(repository, h.tag);
+  const checkedPull = (await deps.api(`/repos/${repository}/pulls/${h.pullNumber}`)).data;
+  if (checked.release === null) {
+    refuse("recovery_release_readback_failed", "historical beta.1 release was not readable after recovery");
+  }
+  const checkedResult = validateHistoricalBeta1Recovery({
+    ...input,
+    pull: checkedPull,
+    tagRef: checked.tagRef,
+    release: checked.release,
+  });
+
+  if (checkedResult.action === "reconcile_labels") {
+    if (process.env.RAN_RELEASE_PUBLISHER_MUTATE !== "1") {
+      refuse("mutation_disabled", "historical recovery mutation requires RAN_RELEASE_PUBLISHER_MUTATE=1");
+    }
+    await reconcileLabels(repository, checkedPull, deps.api);
   }
 
-  const checked = await remoteState(repository, h.tag);
-  const finalPull = (await api(`/repos/${repository}/pulls/${h.pullNumber}`)).data;
-  validateHistoricalBeta1Recovery({ ...input, pull: finalPull, tagRef: checked.tagRef, release: checked.release });
-  return { action: "recovered_release", releaseId: checked.release?.id };
+  const finalState = await deps.remoteState(repository, h.tag);
+  const finalPull = (await deps.api(`/repos/${repository}/pulls/${h.pullNumber}`)).data;
+  const finalResult = validateHistoricalBeta1Recovery({
+    ...input,
+    pull: finalPull,
+    tagRef: finalState.tagRef,
+    release: finalState.release,
+  });
+  if (finalResult.action !== "already_published") {
+    refuse("recovery_label_readback_failed", "historical beta.1 lifecycle labels did not reconcile");
+  }
+  return { action: "recovered_release", releaseId: finalState.release.id };
 }
