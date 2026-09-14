@@ -41,8 +41,12 @@ export function validateHistoricalBeta1Recovery(input) {
     && input.pull?.merge_commit_sha === h.candidateSha
     && input.pull?.base?.ref === "main"
     && input.pull?.base?.sha === h.baseSha
+    && input.pull?.base?.repo?.id === input.repositoryId
+    && input.pull?.base?.repo?.full_name === input.repository
     && input.pull?.head?.ref === h.branch
     && input.pull?.head?.sha === h.headSha
+    && input.pull?.head?.repo?.id === input.repositoryId
+    && input.pull?.head?.repo?.full_name === input.repository
     && input.pull?.user?.login === "github-actions[bot]"
     && input.pull?.title === `chore(main): release ${h.version}`;
   if (!pullExact) {
