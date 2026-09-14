@@ -95,14 +95,18 @@ function validateReleasePullIdentity(pull, identity, candidateSha, repository, r
 }
 
 function validateReleaseMerge(commit, pull, candidateSha) {
-  const normalMerge = commit?.sha === candidateSha
+  const exactTree = commit?.sha === candidateSha
+    && commit.tree?.sha === pull.head_tree_sha;
+  const normalMerge = exactTree
     && commit.parents?.length === 2
     && commit.parents[0]?.sha === pull.base.sha
-    && commit.parents[1]?.sha === pull.head.sha
-    && commit.tree?.sha === pull.head_tree_sha;
+    && commit.parents[1]?.sha === pull.head.sha;
+  const squashMerge = exactTree
+    && commit.parents?.length === 1
+    && commit.parents[0]?.sha === pull.base.sha;
 
-  if (!normalMerge) {
-    refuse("release_pr_not_normal_merge", "candidate must be the normal two-parent merge of the exact Release Please head");
+  if (!normalMerge && !squashMerge) {
+    refuse("release_pr_not_normal_merge", "candidate must be an exact normal or squash merge of the Release Please head");
   }
 }
 
