@@ -58,6 +58,7 @@ function publishedState() {
 function orchestration(options = {}) {
   const calls = [];
   let mainReads = 0;
+  let pullReads = 0;
   const state = {
     ...(options.published ? publishedState() : { tagRef: null, release: null }),
     labels: options.labels ?? ["autorelease: pending"],
@@ -66,7 +67,13 @@ function orchestration(options = {}) {
   const api = async (path, init = {}) => {
     const method = init.method ?? "GET";
     calls.push(`${method} ${path}`);
-    if (path.endsWith(`/pulls/${h.pullNumber}`)) return { data: currentPull() };
+    if (path.endsWith(`/pulls/${h.pullNumber}`)) {
+      pullReads += 1;
+      if (options.driftPull && pullReads > 1) {
+        return { data: { ...currentPull(), head: { ...currentPull().head, sha: "f".repeat(40) } } };
+      }
+      return { data: currentPull() };
+    }
     if (path.endsWith(`/git/commits/${h.candidateSha}`)) return { data: input().candidateCommit };
     if (path.endsWith(`/git/commits/${h.headSha}`)) return { data: input().headCommit };
     if (path.endsWith("/git/ref/heads/main")) {
@@ -141,9 +148,12 @@ test("exact published beta.2 reconciles lifecycle labels without republishing", 
   assert.deepEqual(validateHistoricalBeta2Recovery({ ...input(), ...state, pull: pull(["autorelease: tagged"]) }), { action: "already_published", pullNumber: 18 });
 });
 
-test("partial publication and missing immutable acknowledgement fail closed", () => {
+test("partial publication and absent immutable acknowledgement fail closed", () => {
   refusal("recovery_partial_publication_state", () => validateHistoricalBeta2Recovery({ ...input(), tagRef: publishedState().tagRef }));
   refusal("immutable_releases_disabled", () => validateHistoricalBeta2Recovery({ ...input(), immutableReleasesEnabled: false }));
+  const missing = input();
+  delete missing.immutableReleasesEnabled;
+  refusal("immutable_releases_disabled", () => validateHistoricalBeta2Recovery(missing));
 });
 
 test("recovery creates, proves readback, then reconciles labels", async () => {
@@ -157,7 +167,16 @@ test("recovery creates, proves readback, then reconciles labels", async () => {
   assert.ok(mocked.calls.slice(create + 1, label).includes("REMOTE"));
 });
 
-test("recovery is mutation-gated and rechecks live main", async () => {
+test("recovery re-fetches exact PR identity before irreversible publication", async () => {
+  const mocked = orchestration({ driftPull: true });
+  await withEnv(() => assert.rejects(
+    recoverHistoricalBeta2("/unused", event(), REPOSITORY, REPOSITORY_ID, CURRENT_SHA, mocked.deps),
+    (error) => error.code === "recovery_release_pr_invalid",
+  ));
+  assert.equal(mocked.calls.includes("CREATE"), false);
+});
+
+test("recovery is mutation-gated and rechecks live main before release creation", async () => {
   const disabled = orchestration();
   await withEnv(() => assert.rejects(
     recoverHistoricalBeta2("/unused", event(), REPOSITORY, REPOSITORY_ID, CURRENT_SHA, disabled.deps),
@@ -171,6 +190,15 @@ test("recovery is mutation-gated and rechecks live main", async () => {
     (error) => error.code === "main_moved",
   ));
   assert.equal(moved.calls.includes("CREATE"), false);
+});
+
+test("label-only recovery rechecks live main before label mutation", async () => {
+  const moved = orchestration({ published: true, moveMain: true });
+  await withEnv(() => assert.rejects(
+    recoverHistoricalBeta2("/unused", event(), REPOSITORY, REPOSITORY_ID, CURRENT_SHA, moved.deps),
+    (error) => error.code === "main_moved",
+  ));
+  assert.equal(moved.calls.some((call) => call.includes("/labels")), false);
 });
 
 test("recovery never labels before exact release readback", async () => {
