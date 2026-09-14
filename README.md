@@ -65,11 +65,14 @@ or own temporary files, permissions, cleanup, credentials or deployment state.
 
 Run `composer install`, then `composer check` with PHP 8.2 and Node 24.11.0.
 Composer consumes the package through its Git version; `composer.json` deliberately
-has no version field. The initial `0.0.0` release manifest is an unreleased
-bootstrap, not an available version.
+has no version field. Release Please may advance the release manifest before the
+separate publisher successfully creates the corresponding immutable GitHub
+release. A manifest version is therefore release-preparation state, not proof that
+that version is available to Composer consumers; published tags/releases are the
+availability boundary.
 
-See [RELEASING.md](RELEASING.md) for the independent beta release process and
-installation before the first release.
+See [RELEASING.md](RELEASING.md) for the independent beta release process,
+including recovery after a prepared release is not published.
 
 ## Community
 
