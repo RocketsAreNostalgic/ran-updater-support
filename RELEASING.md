@@ -2,15 +2,17 @@
 
 This package follows the RAN release-updater's exact-commit publishing process.
 Its independent prerelease line starts at `v0.1.0-beta.1`. Composer derives
-versions from Git tags; the manifest's `0.0.0` value means unreleased.
+available versions from published Git tags/releases. The Release Please manifest
+tracks release-preparation state and may therefore be ahead of the latest
+successfully published version after a failed publication attempt.
 
 ## Repository setup
 
 The repository uses `main`, protected against deletion and force pushes, with
 pull requests and the `quality` CI check required. Release PRs must use a normal
 merge commit: squash and rebase merges cannot satisfy the publisher's parent and
-tree checks. Every PR receives independent review of its exact base and head;
-merging remains an explicit owner decision.
+tree checks. Ordinary PRs may be squashed; the generated Release Please version
+PR is the exception and must be merged normally.
 
 Enable GitHub Actions PR creation and immutable releases before releasing.
 Set the repository variable
@@ -28,9 +30,8 @@ The variable acknowledges that setting; it does not enable it.
 2. Release Please opens a version PR. Approve its Actions workflow run if GitHub
    requires approval for the bot-created PR; `CI` also supports manual dispatch
    against the exact PR branch. Review the version and complete changelog diff.
-   The first release must advance `0.0.0` to `0.1.0-beta.1`; later releases remain
-   on the `0.1.0-beta.*` line. Changing that line requires a reviewed configuration
-   and publisher policy change.
+   Prereleases remain on the `0.1.0-beta.*` line unless a reviewed configuration
+   and publisher policy change deliberately advances that line.
 3. Run independent review against the exact PR base and head, resolve findings,
    and present the checks and normal-merge method to the owner. Merge only after
    explicit authorization. Only the manifest version and prepended changelog
@@ -44,23 +45,30 @@ The variable acknowledges that setting; it does not enable it.
    before changing the PR's lifecycle label. A retry after label interruption
    reconciles the existing release instead of publishing a second one.
 
+If a version PR is merged but publication fails before a tag/release is created,
+do not create or move a tag manually and do not rewrite the manifest backwards.
+The manifest records that prepared version even though it is unavailable. Fix the
+cause through the normal reviewed workflow, let Release Please prepare the next
+prerelease, and merge that generated version PR normally. Consumers must treat
+published tags/releases, not the manifest alone, as the availability boundary.
+
 Do not create manual release tags, move existing tags, bypass failed checks, or
 edit generated version/changelog content outside a reviewed release correction.
 Release Please prepares PRs; this repository's separate publisher owns releases.
 Packagist registration is a separate publication step and is not implied by a
 GitHub release.
 
-## Before the first release
+## Before the first published release
 
 A consuming root project can declare the GitHub VCS repository and require
-`ran/updater-support` using `dev-main`. Commit the root project's lockfile, verify its source reference
-against the reviewed full commit SHA, and explicitly allow that development
-dependency. Composer
-repository declarations are root-only and are not inherited from dependencies.
-Replace the development pin with an owner-approved beta tag after publication.
-There is no claimed `0.1.0` release and no local path repository requirement.
+`ran/updater-support` using `dev-main`. Commit the root project's lockfile, verify
+its source reference against the reviewed full commit SHA, and explicitly allow
+that development dependency. Composer repository declarations are root-only and
+are not inherited from dependencies. Replace the development pin with an
+owner-approved beta tag after publication. There is no claimed stable `0.1.0`
+release and no local path repository requirement.
 
 The initial bootstrap boundary is the fresh repository's seed commit. The
-following `feat` commit supplies the first release's source and changelog scope.
+following `feat` commit supplied the first release's source and changelog scope.
 See the [Release Please manifest reference](https://github.com/googleapis/release-please/blob/main/docs/manifest-releaser.md)
 and [GitHub immutable releases documentation](https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/establish-provenance-and-integrity/prevent-release-changes).
