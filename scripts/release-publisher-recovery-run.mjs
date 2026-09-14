@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { candidateIdentity, manifestVersion, verifyReleaseDelta } from "./release-publisher-content.mjs";
+import { candidateIdentity, manifestVersion, refuse, verifyReleaseDelta } from "./release-publisher-content.mjs";
 import { labels } from "./release-publisher-decision.mjs";
 import { changedPaths, releaseContents } from "./release-publisher-git.mjs";
 import { api, createImmutableRelease, remoteState } from "./release-publisher-github.mjs";
@@ -58,6 +58,12 @@ export async function recoverHistoricalBeta1(root, event, repository, repository
   };
 
   let result = validateHistoricalBeta1Recovery(input);
+  if (result.action === "create_release" || result.action === "reconcile_labels") {
+    if (process.env.RAN_RELEASE_PUBLISHER_MUTATE !== "1") {
+      refuse("mutation_disabled", "historical recovery mutation requires RAN_RELEASE_PUBLISHER_MUTATE=1");
+    }
+  }
+
   if (result.action === "create_release") {
     const fresh = await remoteState(repository, h.tag);
     input = { ...input, tagRef: fresh.tagRef, release: fresh.release };
