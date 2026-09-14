@@ -8,6 +8,10 @@ const REPOSITORY = "RocketsAreNostalgic/ran-updater-support";
 const REPOSITORY_ID = 1360288787;
 const CURRENT_SHA = "e".repeat(40);
 
+function repoIdentity() {
+  return { id: REPOSITORY_ID, full_name: REPOSITORY };
+}
+
 function identity() {
   return {
     candidateSha: h.candidateSha,
@@ -24,8 +28,8 @@ function pull(labels = [{ name: "autorelease: pending" }]) {
     merged_at: "2026-09-12T18:07:56Z",
     draft: false,
     merge_commit_sha: h.candidateSha,
-    base: { ref: "main", sha: h.baseSha },
-    head: { ref: h.branch, sha: h.headSha },
+    base: { ref: "main", sha: h.baseSha, repo: repoIdentity() },
+    head: { ref: h.branch, sha: h.headSha, repo: repoIdentity() },
     user: { login: "github-actions[bot]" },
     title: `chore(main): release ${h.version}`,
     labels,
@@ -39,7 +43,7 @@ function input() {
       conclusion: "success",
       head_branch: "main",
       head_sha: CURRENT_SHA,
-      head_repository: { id: REPOSITORY_ID, full_name: REPOSITORY },
+      head_repository: repoIdentity(),
     },
     repository: REPOSITORY,
     repositoryId: REPOSITORY_ID,
@@ -88,7 +92,7 @@ test("historical identity drift fails closed", () => {
     validateHistoricalBeta1Recovery({ ...input(), identity: { ...identity(), candidateSha: "f".repeat(40) } })
   );
   refusal("recovery_release_pr_invalid", () =>
-    validateHistoricalBeta1Recovery({ ...input(), pull: { ...pull(), head: { ref: h.branch, sha: "f".repeat(40) } } })
+    validateHistoricalBeta1Recovery({ ...input(), pull: { ...pull(), head: { ...pull().head, repo: { ...repoIdentity(), id: REPOSITORY_ID + 1 } } } })
   );
   refusal("recovery_git_identity_invalid", () =>
     validateHistoricalBeta1Recovery({ ...input(), candidateCommit: { ...input().candidateCommit, tree: { sha: "f".repeat(40) } } })
