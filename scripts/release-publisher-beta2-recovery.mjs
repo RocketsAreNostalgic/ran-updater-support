@@ -89,7 +89,7 @@ export function validateHistoricalBeta2Recovery(input) {
   if (!pullLabels.includes(PENDING_LABEL) || pullLabels.includes(TAGGED_LABEL)) {
     refuse("recovery_release_pr_label_conflict", "unpublished beta.2 recovery candidate must have only pending label");
   }
-  if (input.immutableReleasesEnabled === false) {
+  if (input.immutableReleasesEnabled !== true) {
     refuse("immutable_releases_disabled", "immutable-release acknowledgement is missing or mismatched");
   }
   return { action: "create_release", pullNumber: h.pullNumber };
