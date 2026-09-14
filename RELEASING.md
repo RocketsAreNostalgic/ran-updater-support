@@ -47,10 +47,15 @@ The variable acknowledges that setting; it does not enable it.
 
 If a version PR is merged but publication fails before a tag/release is created,
 do not create or move a tag manually and do not rewrite the manifest backwards.
-The manifest records that prepared version even though it is unavailable. Fix the
-cause through the normal reviewed workflow, let Release Please prepare the next
-prerelease, and merge that generated version PR normally. Consumers must treat
-published tags/releases, not the manifest alone, as the availability boundary.
+The manifest records that prepared version even though it is unavailable, and
+Release Please may refuse to prepare another version while that merged release PR
+remains untagged. Fix the cause through the normal reviewed workflow, then recover
+the exact historical candidate only through a bounded, reviewed, fail-closed
+release-control change that proves the original PR, commit/tree identity, release
+metadata, immutable publication and readback before lifecycle labels are changed.
+Remove any one-time recovery authority after successful reconciliation. Consumers
+must treat published tags/releases, not the manifest alone, as the availability
+boundary.
 
 Do not create manual release tags, move existing tags, bypass failed checks, or
 edit generated version/changelog content outside a reviewed release correction.
