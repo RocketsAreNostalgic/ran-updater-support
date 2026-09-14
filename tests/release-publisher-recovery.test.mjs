@@ -53,6 +53,7 @@ function input() {
     repository: REPOSITORY,
     repositoryId: REPOSITORY_ID,
     currentSha: CURRENT_SHA,
+    mainSha: CURRENT_SHA,
     currentVersion: h.version,
     identity: identity(),
     pull: pull(),
@@ -77,6 +78,7 @@ function refusal(code, callback) {
 
 function orchestration(options = {}) {
   const calls = [];
+  let mainReads = 0;
   const state = {
     tagRef: options.published ? { object: { type: "commit", sha: h.candidateSha } } : null,
     release: options.published ? {
@@ -105,6 +107,16 @@ function orchestration(options = {}) {
     }
     if (path.endsWith(`/git/commits/${h.headSha}`)) {
       return { data: input().headCommit };
+    }
+    if (path.endsWith("/git/ref/heads/main")) {
+      mainReads += 1;
+      return {
+        data: {
+          object: {
+            sha: options.moveMainBeforeCreate && mainReads > 1 ? "f".repeat(40) : CURRENT_SHA,
+          },
+        },
+      };
     }
     if (path.endsWith("/labels") && method === "POST") {
       if (!state.labels.includes("autorelease: tagged")) state.labels.push("autorelease: tagged");
@@ -190,6 +202,9 @@ test("recovery requires exact successful current main evidence", () => {
   refusal("recovery_quality_identity_invalid", () =>
     validateHistoricalBeta1Recovery({ ...input(), repositoryId: undefined, event: { ...event(), head_repository: { full_name: REPOSITORY } } })
   );
+  refusal("main_moved", () =>
+    validateHistoricalBeta1Recovery({ ...input(), mainSha: "f".repeat(40) })
+  );
 });
 
 test("historical identity drift fails closed", () => {
@@ -274,6 +289,17 @@ test("recovery mutation is explicitly gated", async () => {
       (error) => error.code === "mutation_disabled",
     ),
     false,
+  );
+  assert.equal(mocked.calls.filter((call) => call === "CREATE" || call.includes("/labels")).length, 0);
+});
+
+test("recovery refuses if live main moves before publication", async () => {
+  const mocked = orchestration({ moveMainBeforeCreate: true });
+  await withMutationEnvironment(() =>
+    assert.rejects(
+      recoverHistoricalBeta1("/unused", event(), REPOSITORY, REPOSITORY_ID, CURRENT_SHA, mocked.deps),
+      (error) => error.code === "main_moved",
+    )
   );
   assert.equal(mocked.calls.filter((call) => call === "CREATE" || call.includes("/labels")).length, 0);
 });
