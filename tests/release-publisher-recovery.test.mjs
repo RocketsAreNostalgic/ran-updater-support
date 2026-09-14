@@ -77,6 +77,12 @@ test("recovery is inert after the version advances", () => {
   );
 });
 
+test("recovery requires exact successful current main evidence", () => {
+  refusal("recovery_quality_identity_invalid", () =>
+    validateHistoricalBeta1Recovery({ ...input(), currentSha: "f".repeat(40) })
+  );
+});
+
 test("historical identity drift fails closed", () => {
   refusal("recovery_candidate_identity_invalid", () =>
     validateHistoricalBeta1Recovery({ ...input(), identity: { ...identity(), candidateSha: "f".repeat(40) } })
