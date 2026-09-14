@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { candidateIdentity, manifestVersion, refuse, verifyReleaseDelta } from "./release-publisher-content.mjs";
-import { labels } from "./release-publisher-decision.mjs";
+import { labels, PENDING_LABEL, TAGGED_LABEL } from "./release-publisher-decision.mjs";
 import { changedPaths, releaseContents } from "./release-publisher-git.mjs";
 import { api, createImmutableRelease, remoteState } from "./release-publisher-github.mjs";
 import { HISTORICAL_BETA2 as h, validateHistoricalBeta2Recovery } from "./release-publisher-beta2-recovery.mjs";
@@ -27,14 +27,14 @@ const production = {
 };
 
 async function reconcileLabels(repository, pull, request) {
-  if (!labels(pull).includes("autorelease: tagged")) {
+  if (!labels(pull).includes(TAGGED_LABEL)) {
     await request(`/repos/${repository}/issues/${h.pullNumber}/labels`, {
       method: "POST",
-      body: { labels: ["autorelease: tagged"] },
+      body: { labels: [TAGGED_LABEL] },
     });
   }
-  if (labels(pull).includes("autorelease: pending")) {
-    await request(`/repos/${repository}/issues/${h.pullNumber}/labels/${encodeURIComponent("autorelease: pending")}`, {
+  if (labels(pull).includes(PENDING_LABEL)) {
+    await request(`/repos/${repository}/issues/${h.pullNumber}/labels/${encodeURIComponent(PENDING_LABEL)}`, {
       method: "DELETE",
       allow404: true,
     });
@@ -88,37 +88,47 @@ export async function recoverHistoricalBeta2(root, event, repository, repository
   };
 
   let result = validateHistoricalBeta2Recovery(input);
-  if (result.action === "create_release" || result.action === "reconcile_labels") {
-    if (process.env.RAN_RELEASE_PUBLISHER_MUTATE !== "1") {
-      refuse("mutation_disabled", "historical beta.2 recovery mutation requires RAN_RELEASE_PUBLISHER_MUTATE=1");
-    }
+  const mutating = result.action === "create_release" || result.action === "reconcile_labels";
+  if (mutating && process.env.RAN_RELEASE_PUBLISHER_MUTATE !== "1") {
+    refuse("mutation_disabled", "historical beta.2 recovery mutation requires RAN_RELEASE_PUBLISHER_MUTATE=1");
   }
 
-  if (result.action === "create_release") {
-    const [fresh, freshMain] = await Promise.all([
+  if (mutating) {
+    const [freshState, freshMain, freshPullResponse] = await Promise.all([
       deps.remoteState(repository, h.tag),
       deps.api(`/repos/${repository}/git/ref/heads/main`),
+      deps.api(`/repos/${repository}/pulls/${h.pullNumber}`),
     ]);
     input = {
       ...input,
       mainSha: freshMain.data?.object?.sha,
-      tagRef: fresh.tagRef,
-      release: fresh.release,
+      pull: freshPullResponse.data,
+      tagRef: freshState.tagRef,
+      release: freshState.release,
+      immutableReleasesEnabled: freshState.release === null
+        ? process.env.RAN_RELEASE_PUBLISHER_IMMUTABLE_RELEASES_ACKNOWLEDGED_REPOSITORY_ID === String(repositoryId)
+        : undefined,
     };
     result = validateHistoricalBeta2Recovery(input);
+
     if (result.action === "create_release") {
       await deps.createImmutableRelease(repository, identity);
     }
   }
 
-  const checked = await deps.remoteState(repository, h.tag);
-  const checkedPull = (await deps.api(`/repos/${repository}/pulls/${h.pullNumber}`)).data;
+  const [checked, checkedPullResponse, checkedMain] = await Promise.all([
+    deps.remoteState(repository, h.tag),
+    deps.api(`/repos/${repository}/pulls/${h.pullNumber}`),
+    deps.api(`/repos/${repository}/git/ref/heads/main`),
+  ]);
+  const checkedPull = checkedPullResponse.data;
   if (checked.release === null) {
     refuse("recovery_release_readback_failed", "historical beta.2 release was not readable after recovery");
   }
 
   const checkedResult = validateHistoricalBeta2Recovery({
     ...input,
+    mainSha: checkedMain.data?.object?.sha,
     pull: checkedPull,
     tagRef: checked.tagRef,
     release: checked.release,
@@ -131,10 +141,15 @@ export async function recoverHistoricalBeta2(root, event, repository, repository
     await reconcileLabels(repository, checkedPull, deps.api);
   }
 
-  const finalState = await deps.remoteState(repository, h.tag);
-  const finalPull = (await deps.api(`/repos/${repository}/pulls/${h.pullNumber}`)).data;
+  const [finalState, finalPullResponse, finalMain] = await Promise.all([
+    deps.remoteState(repository, h.tag),
+    deps.api(`/repos/${repository}/pulls/${h.pullNumber}`),
+    deps.api(`/repos/${repository}/git/ref/heads/main`),
+  ]);
+  const finalPull = finalPullResponse.data;
   const finalResult = validateHistoricalBeta2Recovery({
     ...input,
+    mainSha: finalMain.data?.object?.sha,
     pull: finalPull,
     tagRef: finalState.tagRef,
     release: finalState.release,
