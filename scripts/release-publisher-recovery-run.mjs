@@ -48,17 +48,19 @@ export async function recoverHistoricalBeta1(root, event, repository, repository
 
   const candidate = deps.releaseContents(root, h.candidateSha);
   const identity = deps.candidateIdentity(candidate, h.candidateSha);
-  const [pullResponse, candidateCommitResponse, headCommitResponse, state] = await Promise.all([
+  const [pullResponse, candidateCommitResponse, headCommitResponse, state, mainResponse] = await Promise.all([
     deps.api(`/repos/${repository}/pulls/${h.pullNumber}`),
     deps.api(`/repos/${repository}/git/commits/${h.candidateSha}`),
     deps.api(`/repos/${repository}/git/commits/${h.headSha}`),
     deps.remoteState(repository, h.tag),
+    deps.api(`/repos/${repository}/git/ref/heads/main`),
   ]);
   let input = {
     event,
     repository,
     repositoryId,
     currentSha,
+    mainSha: mainResponse.data?.object?.sha,
     currentVersion,
     identity,
     pull: pullResponse.data,
@@ -82,8 +84,16 @@ export async function recoverHistoricalBeta1(root, event, repository, repository
   }
 
   if (result.action === "create_release") {
-    const fresh = await deps.remoteState(repository, h.tag);
-    input = { ...input, tagRef: fresh.tagRef, release: fresh.release };
+    const [fresh, freshMain] = await Promise.all([
+      deps.remoteState(repository, h.tag),
+      deps.api(`/repos/${repository}/git/ref/heads/main`),
+    ]);
+    input = {
+      ...input,
+      mainSha: freshMain.data?.object?.sha,
+      tagRef: fresh.tagRef,
+      release: fresh.release,
+    };
     result = validateHistoricalBeta1Recovery(input);
     if (result.action === "create_release") {
       await deps.createImmutableRelease(repository, identity);
