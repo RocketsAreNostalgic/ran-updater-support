@@ -74,7 +74,10 @@ export async function runPublisher(root = process.cwd()) {
     refuse("checkout_drift", "checkout is not the CI candidate");
   }
 
-  await recoverHistoricalBeta1(root, event, repository, payload.repository?.id, sha);
+  const recovery = await recoverHistoricalBeta1(root, event, repository, payload.repository?.id, sha);
+  if (recovery.action === "recovered_release") {
+    return recovery;
+  }
 
   const candidateContents = releaseContents(root, sha);
   const parents = commitParents(root, sha);
