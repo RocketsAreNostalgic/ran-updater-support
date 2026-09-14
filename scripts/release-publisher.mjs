@@ -26,7 +26,6 @@ import {
   createImmutableRelease,
   remoteState,
 } from "./release-publisher-github.mjs";
-import { recoverHistoricalBeta1 } from "./release-publisher-recovery-run.mjs";
 
 export {
   PublisherRefusal,
@@ -72,11 +71,6 @@ export async function runPublisher(root = process.cwd()) {
   const sha = event?.head_sha;
   if (!FULL_SHA.test(sha ?? "") || currentSha(root) !== sha) {
     refuse("checkout_drift", "checkout is not the CI candidate");
-  }
-
-  const recovery = await recoverHistoricalBeta1(root, event, repository, payload.repository?.id, sha);
-  if (recovery.action === "recovered_release") {
-    return recovery;
   }
 
   const candidateContents = releaseContents(root, sha);
