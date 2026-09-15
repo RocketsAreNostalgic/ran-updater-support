@@ -15,6 +15,8 @@ use InvalidArgumentException;
  */
 final class RepositoryRelativePath {
 
+	private const MAX_DECODE_PASSES = 8;
+
 	/**
 	 * Normalize one non-empty repository-relative path.
 	 *
@@ -53,11 +55,11 @@ final class RepositoryRelativePath {
 	private static function assertDecodedSegmentIsSafe( string $segment, bool $firstSegment ): void {
 		$decoded = $segment;
 
-		for ( $pass = 0, $limit = strlen( $segment ); $pass < $limit; ++$pass ) {
+		for ( $pass = 0; $pass < self::MAX_DECODE_PASSES; ++$pass ) {
 			$next = rawurldecode( $decoded );
 
 			if ( $next === $decoded ) {
-				break;
+				return;
 			}
 
 			$decoded = $next;
@@ -70,6 +72,10 @@ final class RepositoryRelativePath {
 				|| 1 === preg_match( '/[\x00-\x1F\x7F]/', $decoded ) ) {
 				throw self::invalid();
 			}
+		}
+
+		if ( rawurldecode( $decoded ) !== $decoded ) {
+			throw self::invalid();
 		}
 	}
 
