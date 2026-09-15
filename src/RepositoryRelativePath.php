@@ -39,18 +39,18 @@ final class RepositoryRelativePath {
 		}
 
 		$segments = explode( '/', $value );
-		foreach ( $segments as $segment ) {
+		foreach ( $segments as $index => $segment ) {
 			if ( '' === $segment || '.' === $segment || '..' === $segment ) {
 				throw self::invalid();
 			}
 
-			self::assertDecodedSegmentIsSafe( $segment );
+			self::assertDecodedSegmentIsSafe( $segment, 0 === $index );
 		}
 
 		return implode( '/', $segments );
 	}
 
-	private static function assertDecodedSegmentIsSafe( string $segment ): void {
+	private static function assertDecodedSegmentIsSafe( string $segment, bool $firstSegment ): void {
 		$decoded = $segment;
 
 		for ( $pass = 0, $limit = strlen( $segment ); $pass < $limit; ++$pass ) {
@@ -66,6 +66,7 @@ final class RepositoryRelativePath {
 				|| '..' === $decoded
 				|| str_contains( $decoded, '/' )
 				|| str_contains( $decoded, '\\' )
+				|| ( $firstSegment && 1 === preg_match( '/^[A-Za-z]:/', $decoded ) )
 				|| 1 === preg_match( '/[\x00-\x1F\x7F]/', $decoded ) ) {
 				throw self::invalid();
 			}
