@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.0-beta.3](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v0.1.0-beta.2...v0.1.0-beta.3) (2026-09-15)
+
+
+### Features
+
+* add repository-relative path primitive ([#21](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/21)) ([0e78ef2](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/0e78ef24e52480380b09b9b92ef6285f5d4e2a05))
+
+
+### Bug Fixes
+
+* recover unpublished beta.2 release ([#19](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/19)) ([e6cad27](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/e6cad27c1b0c8ad89c166dc4913ac7a9f408035c))
+
 ## [0.1.0-beta.2](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v0.1.0-beta.1...v0.1.0-beta.2) (2026-09-14)
 
 
