@@ -9,12 +9,23 @@ const workflow = readFileSync(
 
 test("release workflow authenticates the canonical CI path before mutation", () => {
   const jobStart = workflow.indexOf("jobs:\n  release:");
-  const runsOn = workflow.indexOf("\n    runs-on:", jobStart);
+  const ifMarker = "    if: >-\n";
+  const ifStart = workflow.indexOf(ifMarker, jobStart);
+  const runsOn = workflow.indexOf("\n    runs-on:", ifStart);
 
-  assert.ok(jobStart >= 0 && runsOn > jobStart);
-  const admission = workflow.slice(jobStart, runsOn);
+  assert.ok(jobStart >= 0 && ifStart > jobStart && runsOn > ifStart);
+  const conditionLines = workflow
+    .slice(ifStart + ifMarker.length, runsOn)
+    .trimEnd()
+    .split("\n");
+  assert.ok(
+    conditionLines.every(
+      (line) => line.startsWith("      ") && !line.trimStart().startsWith("#"),
+    ),
+  );
+  const condition = conditionLines.map((line) => line.trim()).join(" ");
   assert.match(
-    admission,
-    /github\.event\.workflow_run\.path == '\.github\/workflows\/ci\.yml'/,
+    condition,
+    /&& github\.event\.workflow_run\.path == '\.github\/workflows\/ci\.yml' &&/,
   );
 });
