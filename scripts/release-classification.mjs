@@ -322,12 +322,22 @@ export function runCli(root = process.cwd(), env = process.env) {
   }
 
   const classificationBaseSha = mergeBase(root, baseSha, headSha);
+  const canonicalReleaseIdentity =
+    prAuthor === "github-actions[bot]" &&
+    prHeadRef === RELEASE_BRANCH &&
+    headRepository === repository &&
+    headRepositoryId === repositoryId;
+
   const result = assertReleaseClassification({
     baseComposer: readJsonAt(root, classificationBaseSha, "composer.json"),
-    baseContents: releaseContents(root, baseSha),
+    baseContents: canonicalReleaseIdentity
+      ? releaseContents(root, baseSha)
+      : undefined,
     baseSha,
     headComposer: readJsonAt(root, headSha, "composer.json"),
-    headContents: releaseContents(root, headSha),
+    headContents: canonicalReleaseIdentity
+      ? releaseContents(root, headSha)
+      : undefined,
     headRepository,
     headRepositoryId,
     mergeBaseSha: classificationBaseSha,
