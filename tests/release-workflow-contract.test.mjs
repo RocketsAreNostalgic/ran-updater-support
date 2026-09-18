@@ -40,6 +40,10 @@ test("release job requires the canonical CI workflow path", () => {
 test("trusted release classification workflow stays on protected base", () => {
   assert.match(classificationWorkflow, /^\s*pull_request_target:/m);
   assert.match(classificationWorkflow, /pull_request_target:\n\s+branches: \[main\]/);
+  assert.match(
+    classificationWorkflow,
+    /types: \[opened, synchronize, reopened, edited, labeled, unlabeled\]/,
+  );
   assert.match(classificationWorkflow, /test "\$base_ref" = main/);
   assert.match(
     classificationWorkflow,
@@ -60,6 +64,30 @@ test("trusted release classification workflow stays on protected base", () => {
   assert.match(
     classificationWorkflow,
     /run: node scripts\/release-classification\.mjs/,
+  );
+  assert.match(
+    classificationWorkflow,
+    /\.head\.repo\.full_name/,
+  );
+  assert.match(
+    classificationWorkflow,
+    /\.head\.repo\.id/,
+  );
+  assert.match(
+    classificationWorkflow,
+    /autorelease: pending/,
+  );
+  assert.match(
+    classificationWorkflow,
+    /autorelease: tagged/,
+  );
+  assert.match(
+    classificationWorkflow,
+    /RAN_RELEASE_PR_HEAD_REPOSITORY:/,
+  );
+  assert.match(
+    classificationWorkflow,
+    /RAN_RELEASE_PR_PENDING_LABEL:/,
   );
   assert.doesNotMatch(
     classificationWorkflow,
