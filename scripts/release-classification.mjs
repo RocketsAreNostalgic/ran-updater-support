@@ -84,7 +84,7 @@ export function assertReleaseClassification({
   const visible = visibleReleaseTypes(releaseConfig);
   if (!classification.breaking && !visible.has(classification.type)) {
     throw new Error(
-      `release-significant updater-support changes require one of ${[...visible].join(", ")} or an explicit breaking ! classification; classification "${classification.type}" is hidden`,
+      `release-significant updater-support changes require one of ${[...visible].join(", ")} or an explicit breaking ! classification; classification "${classification.type}" is not release-driving`,
     );
   }
   return { required: true, classification };
@@ -115,8 +115,12 @@ function readComposerAt(root, sha) {
 }
 
 function changedPaths(root, baseSha, headSha) {
-  return git(root, ["diff", "--name-only", baseSha, headSha])
-    .split("\n")
+  return execFileSync("git", ["diff", "--name-only", "-z", baseSha, headSha], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  })
+    .split("\0")
     .filter(Boolean)
     .sort();
 }
