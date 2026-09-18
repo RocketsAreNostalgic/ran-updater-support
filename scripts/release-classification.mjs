@@ -175,6 +175,17 @@ export function assertReleaseClassification({
     return { required: true, classification: null, releasePull: true };
   }
 
+  if (
+    paths.some(
+      (path) =>
+        path === ".release-please-manifest.json" || path === "CHANGELOG.md",
+    )
+  ) {
+    throw new Error(
+      "release metadata changes are only permitted in canonical Release Please pull requests",
+    );
+  }
+
   if (!releaseSignificantChange({ baseComposer, headComposer, paths })) {
     return { required: false, classification: null, releasePull: false };
   }
@@ -216,7 +227,14 @@ function mergeBase(root, baseSha, headSha) {
 }
 
 function changedPaths(root, baseSha, headSha) {
-  return git(root, ["diff", "--name-only", "-z", baseSha, headSha])
+  return git(root, [
+    "diff",
+    "--name-only",
+    "--no-renames",
+    "-z",
+    baseSha,
+    headSha,
+  ])
     .split("\0")
     .filter(Boolean)
     .sort();
