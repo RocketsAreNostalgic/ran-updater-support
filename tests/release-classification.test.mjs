@@ -6,9 +6,10 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
+  assertCanonicalReleasePull,
   assertReleaseClassification,
   classifyTitle,
-  productionRequirementsChanged,
+  productionComposerMetadataChanged,
   releaseSignificantChange,
   runCli,
   visibleReleaseTypes,
@@ -30,12 +31,21 @@ const releaseConfig = {
 };
 
 const baseComposer = {
+  name: "ran/updater-support",
+  type: "library",
   require: {
     php: "^8.2",
     "ext-json": "*",
   },
+  autoload: {
+    "psr-4": {
+      "RAN\\UpdaterSupport\\V1\\": "src/",
+    },
+  },
   "require-dev": { "phpstan/phpstan": "^2.1" },
 };
+
+const manifest = { ".": "0.1.0-beta.4" };
 
 function git(root, args) {
   return execFileSync("git", args, {
@@ -50,7 +60,12 @@ function writeJson(path, value) {
 }
 
 test("derives updater-support visible release-driving types", () => {
-  assert.deepEqual([...visibleReleaseTypes(releaseConfig)], ["feat", "fix", "perf", "revert"]);
+  assert.deepEqual([...visibleReleaseTypes(releaseConfig)], [
+    "feat",
+    "fix",
+    "perf",
+    "revert",
+  ]);
 });
 
 test("parses scoped and breaking Conventional Commit titles", () => {
@@ -64,80 +79,145 @@ test("parses scoped and breaking Conventional Commit titles", () => {
   });
 });
 
-test("production requirement comparison ignores key order and require-dev", () => {
-  assert.equal(productionRequirementsChanged(baseComposer, {
-    ...baseComposer,
-    require: {
-      "ext-json": "*",
-      php: "^8.2",
-    },
-    "require-dev": { "phpstan/phpstan": "^3.0" },
-  }), false);
-  assert.equal(productionRequirementsChanged(baseComposer, {
-    ...baseComposer,
-    require: { ...baseComposer.require, php: "^8.3" },
-  }), true);
-});
-
-test("source and production requirements are release-significant", () => {
-  assert.equal(releaseSignificantChange({
-    baseComposer,
-    headComposer: baseComposer,
-    paths: ["src/ArchiveSafety.php"],
-  }), true);
-  assert.equal(releaseSignificantChange({
-    baseComposer,
-    headComposer: {
+test("production Composer comparison is recursive and ignores require-dev", () => {
+  assert.equal(
+    productionComposerMetadataChanged(baseComposer, {
       ...baseComposer,
-      require: { ...baseComposer.require, php: "^8.3" },
-    },
-    paths: ["composer.json"],
-  }), true);
-  assert.equal(releaseSignificantChange({
-    baseComposer,
-    headComposer: baseComposer,
-    paths: ["README.md"],
-  }), false);
+      require: {
+        "ext-json": "*",
+        php: "^8.2",
+      },
+      autoload: {
+        "psr-4": {
+          "RAN\\UpdaterSupport\\V1\\": "src/",
+        },
+      },
+      "require-dev": { "phpstan/phpstan": "^3.0" },
+    }),
+    false,
+  );
+
+  assert.equal(
+    productionComposerMetadataChanged(baseComposer, {
+      ...baseComposer,
+      autoload: {
+        "psr-4": {
+          "RAN\\UpdaterSupport\\V1\\": "lib/",
+        },
+      },
+    }),
+    true,
+  );
 });
 
-test("release-significant changes reject hidden squash classifications", () => {
-  assert.throws(() => assertReleaseClassification({
-    baseComposer,
-    headComposer: baseComposer,
-    releaseConfig,
-    paths: ["src/ArchiveSafety.php"],
-    title: "refactor: reorganize archive safety",
-  }), /release-significant updater-support changes require/);
+test("source and production Composer metadata are release-significant", () => {
+  assert.equal(
+    releaseSignificantChange({
+      baseComposer,
+      headComposer: baseComposer,
+      paths: ["src/ArchiveSafety.php"],
+    }),
+    true,
+  );
+  assert.equal(
+    releaseSignificantChange({
+      baseComposer,
+      headComposer: {
+        ...baseComposer,
+        name: "ran/updater-support-next",
+      },
+      paths: ["composer.json"],
+    }),
+    true,
+  );
+  assert.equal(
+    releaseSignificantChange({
+      baseComposer,
+      headComposer: baseComposer,
+      paths: ["README.md"],
+    }),
+    false,
+  );
+});
+
+test("canonical Release Please pull title must exactly match manifest version", () => {
+  assert.equal(
+    assertCanonicalReleasePull({
+      author: "github-actions[bot]",
+      headRef: "release-please--branches--main--components--ran/updater-support",
+      manifest,
+      title: "chore(main): release 0.1.0-beta.4",
+    }),
+    true,
+  );
+
+  assert.throws(
+    () =>
+      assertCanonicalReleasePull({
+        author: "github-actions[bot]",
+        headRef: "release-please--branches--main--components--ran/updater-support",
+        manifest,
+        title: "chore: release 0.1.0-beta.4",
+      }),
+    /must be exactly/,
+  );
+});
+
+test("release-significant changes reject non-driving squash classifications", () => {
+  assert.throws(
+    () =>
+      assertReleaseClassification({
+        baseComposer,
+        headComposer: baseComposer,
+        releaseConfig,
+        paths: ["src/ArchiveSafety.php"],
+        title: "refactor: reorganize archive safety",
+        manifest,
+      }),
+    /release-significant updater-support changes require/,
+  );
 });
 
 test("visible or explicit breaking classifications admit release-significant changes", () => {
-  assert.equal(assertReleaseClassification({
-    baseComposer,
-    headComposer: baseComposer,
-    releaseConfig,
-    paths: ["src/ArchiveSafety.php"],
-    title: "fix(runtime): preserve archive safety",
-  }).classification.type, "fix");
-  assert.equal(assertReleaseClassification({
-    baseComposer,
-    headComposer: baseComposer,
-    releaseConfig,
-    paths: ["src/ArchiveSafety.php"],
-    title: "refactor!: replace archive contract",
-  }).classification.breaking, true);
+  assert.equal(
+    assertReleaseClassification({
+      baseComposer,
+      headComposer: baseComposer,
+      releaseConfig,
+      paths: ["src/ArchiveSafety.php"],
+      title: "fix(runtime): preserve archive safety",
+      manifest,
+    }).classification.type,
+    "fix",
+  );
+  assert.equal(
+    assertReleaseClassification({
+      baseComposer,
+      headComposer: baseComposer,
+      releaseConfig,
+      paths: ["src/ArchiveSafety.php"],
+      title: "refactor!: replace archive contract",
+      manifest,
+    }).classification.breaking,
+    true,
+  );
 });
 
 test("documentation-only changes do not require a release-driving title", () => {
-  assert.deepEqual(assertReleaseClassification({
-    baseComposer,
-    headComposer: baseComposer,
-    releaseConfig,
-    paths: ["README.md"],
-    title: "Update docs",
-  }), { required: false, classification: null });
+  assert.deepEqual(
+    assertReleaseClassification({
+      baseComposer,
+      headComposer: baseComposer,
+      releaseConfig,
+      paths: ["README.md"],
+      title: "Update docs",
+      manifest,
+    }),
+    { required: false, classification: null, releasePull: false },
+  );
 });
 
-test("CLI verifies exact head and merge-base-to-head classification", () => {
+test("CLI uses trusted base config even when head tries to weaken release semantics", () => {
   const root = mkdtempSync(join(tmpdir(), "updater-support-release-classification-"));
   try {
     git(root, ["init", "--initial-branch=main"]);
@@ -145,35 +225,37 @@ test("CLI verifies exact head and merge-base-to-head classification", () => {
     git(root, ["config", "user.email", "release@example.invalid"]);
     writeJson(join(root, "composer.json"), baseComposer);
     writeJson(join(root, "release-please-config.json"), releaseConfig);
-    writeFileSync(join(root, "README.md"), "base\n");
+    writeJson(join(root, ".release-please-manifest.json"), manifest);
     git(root, ["add", "."]);
     git(root, ["commit", "-m", "chore: base"]);
     const baseSha = git(root, ["rev-parse", "HEAD"]);
-    git(root, ["branch", "feature"]);
 
     mkdirSync(join(root, "src"));
-    writeFileSync(join(root, "src", "BaseOnly.php"), "<?php\n");
-    git(root, ["add", "src/BaseOnly.php"]);
-    git(root, ["commit", "-m", "feat: advance main"]);
-    const advancedBaseSha = git(root, ["rev-parse", "HEAD"]);
-
-    git(root, ["checkout", "feature"]);
-    writeFileSync(join(root, "README.md"), "feature docs\n");
-    git(root, ["add", "README.md"]);
-    git(root, ["commit", "-m", "docs: update docs"]);
+    writeFileSync(join(root, "src", "ArchiveSafety.php"), "<?php\n");
+    writeJson(join(root, "release-please-config.json"), {
+      packages: {
+        ".": {
+          "changelog-sections": [
+            { type: "refactor", section: "Refactors" },
+          ],
+        },
+      },
+    });
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "refactor: weaken config"]);
     const headSha = git(root, ["rev-parse", "HEAD"]);
 
-    assert.deepEqual(runCli(root, {
-      RAN_RELEASE_BASE_SHA: advancedBaseSha,
-      RAN_RELEASE_HEAD_SHA: headSha,
-      RAN_RELEASE_PR_TITLE: "Update docs",
-    }), { required: false, classification: null });
-
-    assert.throws(() => runCli(root, {
-      RAN_RELEASE_BASE_SHA: baseSha,
-      RAN_RELEASE_HEAD_SHA: baseSha,
-      RAN_RELEASE_PR_TITLE: "fix: wrong checkout",
-    }), /does not match pull request head/);
+    assert.throws(
+      () =>
+        runCli(root, {
+          RAN_RELEASE_BASE_SHA: baseSha,
+          RAN_RELEASE_HEAD_SHA: headSha,
+          RAN_RELEASE_PR_TITLE: "refactor: weaken config",
+          RAN_RELEASE_PR_HEAD_REF: "feature",
+          RAN_RELEASE_PR_AUTHOR: "contributor",
+        }),
+      /release-significant updater-support changes require/,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -189,13 +271,13 @@ test("CLI treats newline-containing source paths as release-significant", () => 
     git(root, ["config", "user.email", "release@example.invalid"]);
     writeJson(join(root, "composer.json"), baseComposer);
     writeJson(join(root, "release-please-config.json"), releaseConfig);
+    writeJson(join(root, ".release-please-manifest.json"), manifest);
     git(root, ["add", "."]);
     git(root, ["commit", "-m", "chore: base"]);
     const baseSha = git(root, ["rev-parse", "HEAD"]);
 
     mkdirSync(join(root, "src"));
-    const path = join(root, "src", "Line\nBreak.php");
-    writeFileSync(path, "<?php\n");
+    writeFileSync(join(root, "src", "Line\nBreak.php"), "<?php\n");
     git(root, ["add", "src"]);
     git(root, ["commit", "-m", "refactor: source path"]);
     const headSha = git(root, ["rev-parse", "HEAD"]);
@@ -206,6 +288,8 @@ test("CLI treats newline-containing source paths as release-significant", () => 
           RAN_RELEASE_BASE_SHA: baseSha,
           RAN_RELEASE_HEAD_SHA: headSha,
           RAN_RELEASE_PR_TITLE: "refactor: source path",
+          RAN_RELEASE_PR_HEAD_REF: "feature",
+          RAN_RELEASE_PR_AUTHOR: "contributor",
         }),
       /release-significant updater-support changes require/,
     );
