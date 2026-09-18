@@ -244,6 +244,7 @@ test("CLI uses trusted base config even when head tries to weaken release semant
     git(root, ["add", "."]);
     git(root, ["commit", "-m", "refactor: weaken config"]);
     const headSha = git(root, ["rev-parse", "HEAD"]);
+    git(root, ["checkout", baseSha]);
 
     assert.throws(
       () =>
@@ -281,6 +282,7 @@ test("CLI treats newline-containing source paths as release-significant", () => 
     git(root, ["add", "src"]);
     git(root, ["commit", "-m", "refactor: source path"]);
     const headSha = git(root, ["rev-parse", "HEAD"]);
+    git(root, ["checkout", baseSha]);
 
     assert.throws(
       () =>
