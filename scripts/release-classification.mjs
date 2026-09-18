@@ -6,6 +6,20 @@ import { fileURLToPath } from "node:url";
 
 const FULL_SHA = /^[a-f0-9]{40}$/;
 const TITLE = /^([a-z][a-z0-9-]*)(?:\([^)]+\))?(!)?:\s+\S/;
+const RELEASE_BRANCH_PREFIX = "release-please--branches--main--components--";
+const PRODUCTION_COMPOSER_KEYS = [
+  "name",
+  "type",
+  "require",
+  "autoload",
+  "conflict",
+  "replace",
+  "provide",
+  "bin",
+  "extra",
+  "include-path",
+  "target-dir",
+];
 
 function objectRecord(value, label) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -14,15 +28,29 @@ function objectRecord(value, label) {
   return value;
 }
 
-function canonicalRecord(value) {
-  return Object.fromEntries(
-    Object.entries(value).sort(([left], [right]) => left.localeCompare(right)),
-  );
+function canonicalValue(value) {
+  if (Array.isArray(value)) {
+    return value.map(canonicalValue);
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => [key, canonicalValue(entry)]),
+    );
+  }
+  return value;
 }
 
-export function productionRequirements(composer) {
+export function productionComposerMetadata(composer) {
   const document = objectRecord(composer, "composer.json");
-  return canonicalRecord(objectRecord(document.require ?? {}, "composer.json require"));
+  const metadata = {};
+  for (const key of PRODUCTION_COMPOSER_KEYS) {
+    if (Object.hasOwn(document, key)) {
+      metadata[key] = document[key];
+    }
+  }
+  return canonicalValue(metadata);
 }
 
 export function visibleReleaseTypes(config) {
@@ -38,7 +66,9 @@ export function visibleReleaseTypes(config) {
   const types = new Set();
   for (const section of sections) {
     const entry = objectRecord(section, "release-please changelog section");
-    if (entry.hidden === true) continue;
+    if (entry.hidden === true) {
+      continue;
+    }
     if (typeof entry.type !== "string" || entry.type.length === 0) {
       throw new Error("visible release-please changelog sections must declare a type");
     }
@@ -52,21 +82,61 @@ export function visibleReleaseTypes(config) {
 }
 
 export function classifyTitle(title) {
-  if (typeof title !== "string") throw new Error("pull request title is required");
+  if (typeof title !== "string") {
+    throw new Error("pull request title is required");
+  }
   const match = title.match(TITLE);
-  if (!match) throw new Error("pull request title must use Conventional Commit syntax");
+  if (!match) {
+    throw new Error("pull request title must use Conventional Commit syntax");
+  }
   return { type: match[1], breaking: match[2] === "!" };
 }
 
-export function productionRequirementsChanged(baseComposer, headComposer) {
-  return JSON.stringify(productionRequirements(baseComposer))
-    !== JSON.stringify(productionRequirements(headComposer));
+export function productionComposerMetadataChanged(baseComposer, headComposer) {
+  return (
+    JSON.stringify(productionComposerMetadata(baseComposer)) !==
+    JSON.stringify(productionComposerMetadata(headComposer))
+  );
 }
 
 export function releaseSignificantChange({ baseComposer, headComposer, paths }) {
-  if (!Array.isArray(paths)) throw new Error("changed paths must be a list");
-  return productionRequirementsChanged(baseComposer, headComposer)
-    || paths.some((path) => typeof path === "string" && path.startsWith("src/"));
+  if (!Array.isArray(paths)) {
+    throw new Error("changed paths must be a list");
+  }
+  return (
+    productionComposerMetadataChanged(baseComposer, headComposer) ||
+    paths.some((path) => typeof path === "string" && path.startsWith("src/"))
+  );
+}
+
+export function assertCanonicalReleasePull({
+  author,
+  headRef,
+  manifest,
+  title,
+}) {
+  const isCanonical =
+    author === "github-actions[bot]" &&
+    typeof headRef === "string" &&
+    headRef.startsWith(RELEASE_BRANCH_PREFIX);
+
+  if (!isCanonical) {
+    return false;
+  }
+
+  const document = objectRecord(manifest, ".release-please-manifest.json");
+  const version = document["."];
+  if (typeof version !== "string" || version.length === 0) {
+    throw new Error("release manifest root version is required");
+  }
+
+  const expected = `chore(main): release ${version}`;
+  if (title !== expected) {
+    throw new Error(
+      `canonical Release Please pull request title must be exactly "${expected}"`,
+    );
+  }
+  return true;
 }
 
 export function assertReleaseClassification({
@@ -75,9 +145,23 @@ export function assertReleaseClassification({
   releaseConfig,
   paths,
   title,
+  prAuthor = "",
+  prHeadRef = "",
+  manifest = {},
 }) {
+  if (
+    assertCanonicalReleasePull({
+      author: prAuthor,
+      headRef: prHeadRef,
+      manifest,
+      title,
+    })
+  ) {
+    return { required: true, classification: null, releasePull: true };
+  }
+
   if (!releaseSignificantChange({ baseComposer, headComposer, paths })) {
-    return { required: false, classification: null };
+    return { required: false, classification: null, releasePull: false };
   }
 
   const classification = classifyTitle(title);
@@ -87,39 +171,37 @@ export function assertReleaseClassification({
       `release-significant updater-support changes require one of ${[...visible].join(", ")} or an explicit breaking ! classification; classification "${classification.type}" is not release-driving`,
     );
   }
-  return { required: true, classification };
+
+  return { required: true, classification, releasePull: false };
 }
 
-function git(root, args) {
+function git(root, args, options = {}) {
   return execFileSync("git", args, {
     cwd: root,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
+    ...options,
+  });
 }
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
+function readJsonAt(root, sha, path) {
+  return JSON.parse(git(root, ["show", `${sha}:${path}`]).trim());
+}
+
 function mergeBase(root, baseSha, headSha) {
-  const sha = git(root, ["merge-base", baseSha, headSha]);
+  const sha = git(root, ["merge-base", baseSha, headSha]).trim();
   if (!FULL_SHA.test(sha)) {
     throw new Error("pull request base and head do not have a canonical merge base");
   }
   return sha;
 }
 
-function readComposerAt(root, sha) {
-  return JSON.parse(git(root, ["show", `${sha}:composer.json`]));
-}
-
 function changedPaths(root, baseSha, headSha) {
-  return execFileSync("git", ["diff", "--name-only", "-z", baseSha, headSha], {
-    cwd: root,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  })
+  return git(root, ["diff", "--name-only", "-z", baseSha, headSha])
     .split("\0")
     .filter(Boolean)
     .sort();
@@ -129,29 +211,57 @@ export function runCli(root = process.cwd(), env = process.env) {
   const baseSha = env.RAN_RELEASE_BASE_SHA;
   const headSha = env.RAN_RELEASE_HEAD_SHA;
   const title = env.RAN_RELEASE_PR_TITLE;
+  const prHeadRef = env.RAN_RELEASE_PR_HEAD_REF;
+  const prAuthor = env.RAN_RELEASE_PR_AUTHOR;
+
   if (!FULL_SHA.test(baseSha ?? "") || !FULL_SHA.test(headSha ?? "")) {
-    throw new Error("exact pull request base and head SHAs are required");
+    throw new Error("exact live pull request base and head SHAs are required");
+  }
+  if (
+    typeof title !== "string" ||
+    typeof prHeadRef !== "string" ||
+    typeof prAuthor !== "string" ||
+    prHeadRef.length === 0 ||
+    prAuthor.length === 0
+  ) {
+    throw new Error("live pull request title, head ref, and author are required");
   }
 
-  const checkoutSha = git(root, ["rev-parse", "HEAD"]);
+  const checkoutSha = git(root, ["rev-parse", "HEAD"]).trim();
   if (checkoutSha !== headSha) {
-    throw new Error(`checked out revision ${checkoutSha} does not match pull request head ${headSha}`);
+    throw new Error(
+      `checked out revision ${checkoutSha} does not match live pull request head ${headSha}`,
+    );
   }
 
   const classificationBaseSha = mergeBase(root, baseSha, headSha);
   const result = assertReleaseClassification({
-    baseComposer: readComposerAt(root, classificationBaseSha),
+    baseComposer: readJsonAt(root, classificationBaseSha, "composer.json"),
     headComposer: readJson(`${root}/composer.json`),
-    releaseConfig: readJson(`${root}/release-please-config.json`),
+    releaseConfig: readJsonAt(
+      root,
+      classificationBaseSha,
+      "release-please-config.json",
+    ),
     paths: changedPaths(root, classificationBaseSha, headSha),
     title,
+    prAuthor,
+    prHeadRef,
+    manifest: readJson(`${root}/.release-please-manifest.json`),
   });
 
-  if (result.required) {
-    console.log(`release-significant updater-support change; classification ${result.classification.type}${result.classification.breaking ? "!" : ""} is release-driving`);
+  if (result.releasePull) {
+    console.log("canonical Release Please pull request title is exact");
+  } else if (result.required) {
+    console.log(
+      `release-significant updater-support change; classification ${result.classification.type}${result.classification.breaking ? "!" : ""} is release-driving`,
+    );
   } else {
-    console.log("no release-significant updater-support source or production requirement change");
+    console.log(
+      "no release-significant updater-support source or production Composer metadata change",
+    );
   }
+
   return result;
 }
 
