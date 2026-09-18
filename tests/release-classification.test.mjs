@@ -146,6 +146,7 @@ test("canonical Release Please pull title must exactly match manifest version", 
       author: "github-actions[bot]",
       headRef: "release-please--branches--main--components--ran/updater-support",
       manifest,
+      paths: [".release-please-manifest.json", "CHANGELOG.md"],
       title: "chore(main): release 0.1.0-beta.4",
     }),
     true,
@@ -157,10 +158,46 @@ test("canonical Release Please pull title must exactly match manifest version", 
         author: "github-actions[bot]",
         headRef: "release-please--branches--main--components--ran/updater-support",
         manifest,
+        paths: [".release-please-manifest.json", "CHANGELOG.md"],
         title: "chore: release 0.1.0-beta.4",
       }),
     /must be exactly/,
   );
+});
+
+test("canonical Release Please pull rejects extra changed paths", () => {
+  assert.throws(
+    () =>
+      assertCanonicalReleasePull({
+        author: "github-actions[bot]",
+        headRef: "release-please--branches--main--components--ran/updater-support",
+        manifest,
+        paths: [
+          ".release-please-manifest.json",
+          "CHANGELOG.md",
+          "src/Unexpected.php",
+        ],
+        title: "chore(main): release 0.1.0-beta.4",
+      }),
+    /changed non-generated files/,
+  );
+});
+
+test("ordinary pull requests cannot change release metadata", () => {
+  for (const path of [".release-please-manifest.json", "CHANGELOG.md"]) {
+    assert.throws(
+      () =>
+        assertReleaseClassification({
+          baseComposer,
+          headComposer: baseComposer,
+          releaseConfig,
+          paths: [path],
+          title: "fix(release): alter release metadata",
+          manifest,
+        }),
+      /release metadata changes are only permitted/,
+    );
+  }
 });
 
 test("release-significant changes reject non-driving squash classifications", () => {
@@ -252,6 +289,45 @@ test("CLI uses trusted base config even when head tries to weaken release semant
           RAN_RELEASE_BASE_SHA: baseSha,
           RAN_RELEASE_HEAD_SHA: headSha,
           RAN_RELEASE_PR_TITLE: "refactor: weaken config",
+          RAN_RELEASE_PR_HEAD_REF: "feature",
+          RAN_RELEASE_PR_AUTHOR: "contributor",
+        }),
+      /release-significant updater-support changes require/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI treats a rename out of src as release-significant", () => {
+  const root = mkdtempSync(
+    join(tmpdir(), "updater-support-release-classification-rename-"),
+  );
+  try {
+    git(root, ["init", "--initial-branch=main"]);
+    git(root, ["config", "user.name", "Release Test"]);
+    git(root, ["config", "user.email", "release@example.invalid"]);
+    writeJson(join(root, "composer.json"), baseComposer);
+    writeJson(join(root, "release-please-config.json"), releaseConfig);
+    writeJson(join(root, ".release-please-manifest.json"), manifest);
+    mkdirSync(join(root, "src"));
+    writeFileSync(join(root, "src", "ArchiveSafety.php"), "<?php\n");
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "chore: base"]);
+    const baseSha = git(root, ["rev-parse", "HEAD"]);
+
+    mkdirSync(join(root, "archive"));
+    git(root, ["mv", "src/ArchiveSafety.php", "archive/ArchiveSafety.php"]);
+    git(root, ["commit", "-m", "refactor: move source"]);
+    const headSha = git(root, ["rev-parse", "HEAD"]);
+    git(root, ["checkout", baseSha]);
+
+    assert.throws(
+      () =>
+        runCli(root, {
+          RAN_RELEASE_BASE_SHA: baseSha,
+          RAN_RELEASE_HEAD_SHA: headSha,
+          RAN_RELEASE_PR_TITLE: "refactor: move source",
           RAN_RELEASE_PR_HEAD_REF: "feature",
           RAN_RELEASE_PR_AUTHOR: "contributor",
         }),
