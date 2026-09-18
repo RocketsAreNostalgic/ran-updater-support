@@ -46,6 +46,53 @@ const baseComposer = {
 };
 
 const manifest = { ".": "0.1.0-beta.4" };
+const baseManifest = { ".": "0.1.0-beta.3" };
+const repository = "RocketsAreNostalgic/ran-updater-support";
+const repositoryId = "1360288787";
+const releaseBaseSha = "a".repeat(40);
+
+const baseChangelog =
+  "# Changelog\n\n" +
+  "## [0.1.0-beta.3](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v0.1.0-beta.2...v0.1.0-beta.3) (2026-09-17)\n\n" +
+  "### Bug Fixes\n\n" +
+  "- previous fix\n";
+const headChangelog =
+  "# Changelog\n\n" +
+  "## [0.1.0-beta.4](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v0.1.0-beta.3...v0.1.0-beta.4) (2026-09-18)\n\n" +
+  "### Bug Fixes\n\n" +
+  "- next fix\n\n" +
+  baseChangelog.slice("# Changelog\n\n".length);
+
+const baseReleaseContents = {
+  manifest: `${JSON.stringify(baseManifest, null, 2)}\n`,
+  composer: `${JSON.stringify(baseComposer, null, 2)}\n`,
+  changelog: baseChangelog,
+};
+const headReleaseContents = {
+  manifest: `${JSON.stringify(manifest, null, 2)}\n`,
+  composer: baseReleaseContents.composer,
+  changelog: headChangelog,
+};
+
+function canonicalReleaseInput(overrides = {}) {
+  return {
+    author: "github-actions[bot]",
+    baseContents: baseReleaseContents,
+    baseSha: releaseBaseSha,
+    headContents: headReleaseContents,
+    headRef: "release-please--branches--main--components--ran/updater-support",
+    headRepository: repository,
+    headRepositoryId: repositoryId,
+    mergeBaseSha: releaseBaseSha,
+    paths: [".release-please-manifest.json", "CHANGELOG.md"],
+    pendingLabel: true,
+    repository,
+    repositoryId,
+    taggedLabel: false,
+    title: "chore(main): release 0.1.0-beta.4",
+    ...overrides,
+  };
+}
 
 function git(root, args) {
   return execFileSync("git", args, {
@@ -140,27 +187,16 @@ test("source and production Composer metadata are release-significant", () => {
   );
 });
 
-test("canonical Release Please pull title must exactly match manifest version", () => {
-  assert.equal(
-    assertCanonicalReleasePull({
-      author: "github-actions[bot]",
-      headRef: "release-please--branches--main--components--ran/updater-support",
-      manifest,
-      paths: [".release-please-manifest.json", "CHANGELOG.md"],
-      title: "chore(main): release 0.1.0-beta.4",
-    }),
-    true,
-  );
+test("canonical Release Please pull matches the exact publisher contract", () => {
+  assert.equal(assertCanonicalReleasePull(canonicalReleaseInput()), true);
 
   assert.throws(
     () =>
-      assertCanonicalReleasePull({
-        author: "github-actions[bot]",
-        headRef: "release-please--branches--main--components--ran/updater-support",
-        manifest,
-        paths: [".release-please-manifest.json", "CHANGELOG.md"],
-        title: "chore: release 0.1.0-beta.4",
-      }),
+      assertCanonicalReleasePull(
+        canonicalReleaseInput({
+          title: "chore: release 0.1.0-beta.4",
+        }),
+      ),
     /must be exactly/,
   );
 });
@@ -168,18 +204,92 @@ test("canonical Release Please pull title must exactly match manifest version", 
 test("canonical Release Please pull rejects extra changed paths", () => {
   assert.throws(
     () =>
-      assertCanonicalReleasePull({
-        author: "github-actions[bot]",
-        headRef: "release-please--branches--main--components--ran/updater-support",
-        manifest,
-        paths: [
-          ".release-please-manifest.json",
-          "CHANGELOG.md",
-          "src/Unexpected.php",
-        ],
-        title: "chore(main): release 0.1.0-beta.4",
-      }),
+      assertCanonicalReleasePull(
+        canonicalReleaseInput({
+          paths: [
+            ".release-please-manifest.json",
+            "CHANGELOG.md",
+            "src/Unexpected.php",
+          ],
+        }),
+      ),
     /changed non-generated files/,
+  );
+});
+
+test("canonical Release Please identity requires exact branch and repository", () => {
+  assert.equal(
+    assertCanonicalReleasePull(
+      canonicalReleaseInput({
+        headRef:
+          "release-please--branches--main--components--ran/updater-support-extra",
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    assertCanonicalReleasePull(
+      canonicalReleaseInput({
+        headRepository: "fork/ran-updater-support",
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    assertCanonicalReleasePull(
+      canonicalReleaseInput({
+        headRepositoryId: "999",
+      }),
+    ),
+    false,
+  );
+});
+
+test("canonical Release Please pull requires the exact live base", () => {
+  assert.throws(
+    () =>
+      assertCanonicalReleasePull(
+        canonicalReleaseInput({
+          mergeBaseSha: "b".repeat(40),
+        }),
+      ),
+    /exact live base/,
+  );
+});
+
+test("canonical Release Please pull requires pending and not tagged lifecycle state", () => {
+  assert.throws(
+    () =>
+      assertCanonicalReleasePull(
+        canonicalReleaseInput({
+          pendingLabel: false,
+        }),
+      ),
+    /pending and not tagged/,
+  );
+  assert.throws(
+    () =>
+      assertCanonicalReleasePull(
+        canonicalReleaseInput({
+          taggedLabel: true,
+        }),
+      ),
+    /pending and not tagged/,
+  );
+});
+
+test("canonical Release Please pull validates the publisher content delta", () => {
+  assert.throws(
+    () =>
+      assertCanonicalReleasePull(
+        canonicalReleaseInput({
+          headContents: {
+            ...headReleaseContents,
+            changelog: "# Changelog\n\nmalformed\n",
+          },
+        }),
+      ),
+    /release_content_drift/,
   );
 });
 
@@ -290,7 +400,13 @@ test("CLI uses trusted base config even when head tries to weaken release semant
           RAN_RELEASE_HEAD_SHA: headSha,
           RAN_RELEASE_PR_TITLE: "refactor: weaken config",
           RAN_RELEASE_PR_HEAD_REF: "feature",
+          RAN_RELEASE_PR_HEAD_REPOSITORY: repository,
+          RAN_RELEASE_PR_HEAD_REPOSITORY_ID: repositoryId,
+          RAN_RELEASE_PR_PENDING_LABEL: "false",
+          RAN_RELEASE_PR_TAGGED_LABEL: "false",
           RAN_RELEASE_PR_AUTHOR: "contributor",
+          RAN_RELEASE_REPOSITORY: repository,
+          RAN_RELEASE_REPOSITORY_ID: repositoryId,
         }),
       /release-significant updater-support changes require/,
     );
@@ -329,7 +445,13 @@ test("CLI treats a rename out of src as release-significant", () => {
           RAN_RELEASE_HEAD_SHA: headSha,
           RAN_RELEASE_PR_TITLE: "refactor: move source",
           RAN_RELEASE_PR_HEAD_REF: "feature",
+          RAN_RELEASE_PR_HEAD_REPOSITORY: repository,
+          RAN_RELEASE_PR_HEAD_REPOSITORY_ID: repositoryId,
+          RAN_RELEASE_PR_PENDING_LABEL: "false",
+          RAN_RELEASE_PR_TAGGED_LABEL: "false",
           RAN_RELEASE_PR_AUTHOR: "contributor",
+          RAN_RELEASE_REPOSITORY: repository,
+          RAN_RELEASE_REPOSITORY_ID: repositoryId,
         }),
       /release-significant updater-support changes require/,
     );
@@ -367,7 +489,13 @@ test("CLI treats newline-containing source paths as release-significant", () => 
           RAN_RELEASE_HEAD_SHA: headSha,
           RAN_RELEASE_PR_TITLE: "refactor: source path",
           RAN_RELEASE_PR_HEAD_REF: "feature",
+          RAN_RELEASE_PR_HEAD_REPOSITORY: repository,
+          RAN_RELEASE_PR_HEAD_REPOSITORY_ID: repositoryId,
+          RAN_RELEASE_PR_PENDING_LABEL: "false",
+          RAN_RELEASE_PR_TAGGED_LABEL: "false",
           RAN_RELEASE_PR_AUTHOR: "contributor",
+          RAN_RELEASE_REPOSITORY: repository,
+          RAN_RELEASE_REPOSITORY_ID: repositoryId,
         }),
       /release-significant updater-support changes require/,
     );
