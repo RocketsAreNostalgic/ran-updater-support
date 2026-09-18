@@ -3,7 +3,10 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { verifyReleaseDelta } from "./release-publisher-content.mjs";
+import {
+  candidateIdentity,
+  verifyReleaseDelta,
+} from "./release-publisher-content.mjs";
 import { releaseContents } from "./release-publisher-git.mjs";
 
 const FULL_SHA = /^[a-f0-9]{40}$/;
@@ -121,6 +124,7 @@ export function assertCanonicalReleasePull({
   baseSha,
   headContents,
   headRef,
+  headSha,
   headRepository,
   headRepositoryId,
   mergeBaseSha,
@@ -168,7 +172,13 @@ export function assertCanonicalReleasePull({
   }
 
   const delta = verifyReleaseDelta(baseContents, headContents);
-  const expected = `chore(main): release ${delta.candidateVersion}`;
+  const identity = candidateIdentity(headContents, headSha);
+  if (identity.version !== delta.candidateVersion) {
+    throw new Error(
+      "canonical Release Please pull request candidate identity does not match release delta",
+    );
+  }
+  const expected = `chore(main): release ${identity.version}`;
   if (title !== expected) {
     throw new Error(
       `canonical Release Please pull request title must be exactly "${expected}"`,
@@ -203,6 +213,7 @@ export function assertReleaseClassification({
       baseSha,
       headContents,
       headRef: prHeadRef,
+      headSha,
       headRepository,
       headRepositoryId,
       mergeBaseSha,
