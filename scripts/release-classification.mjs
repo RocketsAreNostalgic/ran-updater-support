@@ -195,6 +195,7 @@ export function assertReleaseClassification({
   headContents,
   headRepository = "",
   headRepositoryId = "",
+  headSha,
   mergeBaseSha,
   releaseConfig,
   paths,
