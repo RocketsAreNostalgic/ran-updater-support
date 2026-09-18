@@ -228,26 +228,22 @@ export function runCli(root = process.cwd(), env = process.env) {
   }
 
   const checkoutSha = git(root, ["rev-parse", "HEAD"]).trim();
-  if (checkoutSha !== headSha) {
+  if (checkoutSha !== baseSha) {
     throw new Error(
-      `checked out revision ${checkoutSha} does not match live pull request head ${headSha}`,
+      `trusted classifier checkout ${checkoutSha} does not match live protected base ${baseSha}`,
     );
   }
 
   const classificationBaseSha = mergeBase(root, baseSha, headSha);
   const result = assertReleaseClassification({
     baseComposer: readJsonAt(root, classificationBaseSha, "composer.json"),
-    headComposer: readJson(`${root}/composer.json`),
-    releaseConfig: readJsonAt(
-      root,
-      classificationBaseSha,
-      "release-please-config.json",
-    ),
+    headComposer: readJsonAt(root, headSha, "composer.json"),
+    releaseConfig: readJsonAt(root, baseSha, "release-please-config.json"),
     paths: changedPaths(root, classificationBaseSha, headSha),
     title,
     prAuthor,
     prHeadRef,
-    manifest: readJson(`${root}/.release-please-manifest.json`),
+    manifest: readJsonAt(root, headSha, ".release-please-manifest.json"),
   });
 
   if (result.releasePull) {
