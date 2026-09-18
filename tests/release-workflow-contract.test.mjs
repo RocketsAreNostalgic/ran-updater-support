@@ -39,6 +39,8 @@ test("release job requires the canonical CI workflow path", () => {
 
 test("trusted release classification workflow stays on protected base", () => {
   assert.match(classificationWorkflow, /^\s*pull_request_target:/m);
+  assert.match(classificationWorkflow, /pull_request_target:\n\s+branches: \[main\]/);
+  assert.match(classificationWorkflow, /test "\$base_ref" = main/);
   assert.match(
     classificationWorkflow,
     /ref: \$\{\{ steps\.pr\.outputs\.base_sha \}\}/,
