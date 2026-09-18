@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+
+import { verifyReleaseDelta } from "./release-publisher-content.mjs";
+import { releaseContents } from "./release-publisher-git.mjs";
 
 const FULL_SHA = /^[a-f0-9]{40}$/;
 const TITLE = /^([a-z][a-z0-9-]*)(?:\([^)]+\))?(!)?:\s+\S/;
-const RELEASE_BRANCH_PREFIX = "release-please--branches--main--components--";
+const RELEASE_BRANCH =
+  "release-please--branches--main--components--ran/updater-support";
 const DEVELOPMENT_ONLY_COMPOSER_KEYS = new Set([
   "require-dev",
   "autoload-dev",
@@ -114,18 +117,44 @@ export function releaseSignificantChange({ baseComposer, headComposer, paths }) 
 
 export function assertCanonicalReleasePull({
   author,
+  baseContents,
+  baseSha,
+  headContents,
   headRef,
-  manifest,
+  headRepository,
+  headRepositoryId,
+  mergeBaseSha,
   paths,
+  pendingLabel,
+  repository,
+  repositoryId,
+  taggedLabel,
   title,
 }) {
   const isCanonical =
     author === "github-actions[bot]" &&
-    typeof headRef === "string" &&
-    headRef.startsWith(RELEASE_BRANCH_PREFIX);
+    headRef === RELEASE_BRANCH &&
+    typeof repository === "string" &&
+    repository.length > 0 &&
+    headRepository === repository &&
+    typeof repositoryId === "string" &&
+    repositoryId.length > 0 &&
+    headRepositoryId === repositoryId;
 
   if (!isCanonical) {
     return false;
+  }
+
+  if (mergeBaseSha !== baseSha) {
+    throw new Error(
+      "canonical Release Please pull request must contain the exact live base",
+    );
+  }
+
+  if (pendingLabel !== true || taggedLabel !== false) {
+    throw new Error(
+      "canonical Release Please pull request must have pending and not tagged lifecycle state",
+    );
   }
 
   const normalizedPaths = [...paths].sort();
@@ -138,13 +167,8 @@ export function assertCanonicalReleasePull({
     );
   }
 
-  const document = objectRecord(manifest, ".release-please-manifest.json");
-  const version = document["."];
-  if (typeof version !== "string" || version.length === 0) {
-    throw new Error("release manifest root version is required");
-  }
-
-  const expected = `chore(main): release ${version}`;
+  const delta = verifyReleaseDelta(baseContents, headContents);
+  const expected = `chore(main): release ${delta.candidateVersion}`;
   if (title !== expected) {
     throw new Error(
       `canonical Release Please pull request title must be exactly "${expected}"`,
@@ -155,20 +179,38 @@ export function assertCanonicalReleasePull({
 
 export function assertReleaseClassification({
   baseComposer,
+  baseContents,
+  baseSha,
   headComposer,
+  headContents,
+  headRepository = "",
+  headRepositoryId = "",
+  mergeBaseSha,
   releaseConfig,
   paths,
+  pendingLabel = false,
+  repository = "",
+  repositoryId = "",
+  taggedLabel = false,
   title,
   prAuthor = "",
   prHeadRef = "",
-  manifest = {},
 }) {
   if (
     assertCanonicalReleasePull({
       author: prAuthor,
+      baseContents,
+      baseSha,
+      headContents,
       headRef: prHeadRef,
-      manifest,
+      headRepository,
+      headRepositoryId,
+      mergeBaseSha,
       paths,
+      pendingLabel,
+      repository,
+      repositoryId,
+      taggedLabel,
       title,
     })
   ) {
@@ -210,10 +252,6 @@ function git(root, args, options = {}) {
   });
 }
 
-function readJson(path) {
-  return JSON.parse(readFileSync(path, "utf8"));
-}
-
 function readJsonAt(root, sha, path) {
   return JSON.parse(git(root, ["show", `${sha}:${path}`]).trim());
 }
@@ -246,6 +284,12 @@ export function runCli(root = process.cwd(), env = process.env) {
   const title = env.RAN_RELEASE_PR_TITLE;
   const prHeadRef = env.RAN_RELEASE_PR_HEAD_REF;
   const prAuthor = env.RAN_RELEASE_PR_AUTHOR;
+  const headRepository = env.RAN_RELEASE_PR_HEAD_REPOSITORY;
+  const headRepositoryId = env.RAN_RELEASE_PR_HEAD_REPOSITORY_ID;
+  const repository = env.RAN_RELEASE_REPOSITORY;
+  const repositoryId = env.RAN_RELEASE_REPOSITORY_ID;
+  const pendingLabelRaw = env.RAN_RELEASE_PR_PENDING_LABEL;
+  const taggedLabelRaw = env.RAN_RELEASE_PR_TAGGED_LABEL;
 
   if (!FULL_SHA.test(baseSha ?? "") || !FULL_SHA.test(headSha ?? "")) {
     throw new Error("exact live pull request base and head SHAs are required");
@@ -254,10 +298,20 @@ export function runCli(root = process.cwd(), env = process.env) {
     typeof title !== "string" ||
     typeof prHeadRef !== "string" ||
     typeof prAuthor !== "string" ||
+    typeof headRepository !== "string" ||
+    typeof headRepositoryId !== "string" ||
+    typeof repository !== "string" ||
+    typeof repositoryId !== "string" ||
+    !["true", "false"].includes(pendingLabelRaw ?? "") ||
+    !["true", "false"].includes(taggedLabelRaw ?? "") ||
     prHeadRef.length === 0 ||
-    prAuthor.length === 0
+    prAuthor.length === 0 ||
+    repository.length === 0 ||
+    repositoryId.length === 0
   ) {
-    throw new Error("live pull request title, head ref, and author are required");
+    throw new Error(
+      "live pull request identity, repository identity, and lifecycle labels are required",
+    );
   }
 
   const checkoutSha = git(root, ["rev-parse", "HEAD"]).trim();
@@ -270,13 +324,22 @@ export function runCli(root = process.cwd(), env = process.env) {
   const classificationBaseSha = mergeBase(root, baseSha, headSha);
   const result = assertReleaseClassification({
     baseComposer: readJsonAt(root, classificationBaseSha, "composer.json"),
+    baseContents: releaseContents(root, baseSha),
+    baseSha,
     headComposer: readJsonAt(root, headSha, "composer.json"),
+    headContents: releaseContents(root, headSha),
+    headRepository,
+    headRepositoryId,
+    mergeBaseSha: classificationBaseSha,
     releaseConfig: readJsonAt(root, baseSha, "release-please-config.json"),
     paths: changedPaths(root, classificationBaseSha, headSha),
+    pendingLabel: pendingLabelRaw === "true",
+    repository,
+    repositoryId,
+    taggedLabel: taggedLabelRaw === "true",
     title,
     prAuthor,
     prHeadRef,
-    manifest: readJsonAt(root, headSha, ".release-please-manifest.json"),
   });
 
   if (result.releasePull) {
