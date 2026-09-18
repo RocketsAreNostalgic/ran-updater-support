@@ -84,7 +84,7 @@ export function assertReleaseClassification({
   const visible = visibleReleaseTypes(releaseConfig);
   if (!classification.breaking && !visible.has(classification.type)) {
     throw new Error(
-      `release-significant updater-support changes require one of ${[...visible].join(", ")} or an explicit breaking ! classification; ${classification.type}: is hidden`,
+      `release-significant updater-support changes require one of ${[...visible].join(", ")} or an explicit breaking ! classification; classification "${classification.type}" is hidden`,
     );
   }
   return { required: true, classification };
@@ -144,7 +144,7 @@ export function runCli(root = process.cwd(), env = process.env) {
   });
 
   if (result.required) {
-    console.log(`release-significant updater-support change; ${result.classification.type}${result.classification.breaking ? "!" : ""}: is release-driving`);
+    console.log(`release-significant updater-support change; classification ${result.classification.type}${result.classification.breaking ? "!" : ""} is release-driving`);
   } else {
     console.log("no release-significant updater-support source or production requirement change");
   }
