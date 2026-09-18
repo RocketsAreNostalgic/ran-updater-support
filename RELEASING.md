@@ -28,11 +28,8 @@ The variable acknowledges that setting; it does not enable it.
    publisher tests. A successful same-repository main push starts Release
    Please.
 2. Release Please opens a version PR. Approve its Actions workflow run if GitHub
-   requires approval for the bot-created PR. If that exact release-PR head has
-   no required `quality` check because GitHub suppressed the bot-created PR
-   event, make a body-only metadata edit on the unchanged PR to trigger the
-   existing `pull_request: edited` CI path. Do not change the release title or
-   source merely to trigger CI. Review the version and complete changelog diff.
+   requires approval for the bot-created PR; `CI` also supports manual dispatch
+   against the exact PR branch. Review the version and complete changelog diff.
    Prereleases remain on the `0.1.0-beta.*` line unless a reviewed configuration
    and publisher policy change deliberately advances that line.
 3. Run independent review against the exact PR base and head, resolve findings,
