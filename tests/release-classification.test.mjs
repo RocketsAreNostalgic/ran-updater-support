@@ -50,6 +50,7 @@ const baseManifest = { ".": "0.1.0-beta.3" };
 const repository = "RocketsAreNostalgic/ran-updater-support";
 const repositoryId = "1360288787";
 const releaseBaseSha = "a".repeat(40);
+const releaseHeadSha = "b".repeat(40);
 
 const baseChangelog =
   "# Changelog\n\n" +
@@ -81,6 +82,7 @@ function canonicalReleaseInput(overrides = {}) {
     baseSha: releaseBaseSha,
     headContents: headReleaseContents,
     headRef: "release-please--branches--main--components--ran/updater-support",
+    headSha: releaseHeadSha,
     headRepository: repository,
     headRepositoryId: repositoryId,
     mergeBaseSha: releaseBaseSha,
@@ -290,6 +292,29 @@ test("canonical Release Please pull validates the publisher content delta", () =
         }),
       ),
     /release_content_drift/,
+  );
+});
+
+test("canonical Release Please pull enforces publisher release-note bounds", () => {
+  const oversizedChangelog =
+    "# Changelog\n\n" +
+    "## [0.1.0-beta.4](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v0.1.0-beta.3...v0.1.0-beta.4) (2026-09-18)\n\n" +
+    "### Bug Fixes\n\n" +
+    "x".repeat(125001) +
+    "\n\n" +
+    baseChangelog.slice("# Changelog\n\n".length);
+
+  assert.throws(
+    () =>
+      assertCanonicalReleasePull(
+        canonicalReleaseInput({
+          headContents: {
+            ...headReleaseContents,
+            changelog: oversizedChangelog,
+          },
+        }),
+      ),
+    /release_notes_invalid/,
   );
 });
 
