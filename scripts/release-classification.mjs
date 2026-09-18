@@ -7,18 +7,15 @@ import { fileURLToPath } from "node:url";
 const FULL_SHA = /^[a-f0-9]{40}$/;
 const TITLE = /^([a-z][a-z0-9-]*)(?:\([^)]+\))?(!)?:\s+\S/;
 const RELEASE_BRANCH_PREFIX = "release-please--branches--main--components--";
-const PRODUCTION_COMPOSER_KEYS = [
-  "name",
-  "type",
-  "require",
-  "autoload",
-  "conflict",
-  "replace",
-  "provide",
-  "bin",
-  "extra",
-  "include-path",
-  "target-dir",
+const DEVELOPMENT_ONLY_COMPOSER_KEYS = new Set([
+  "require-dev",
+  "autoload-dev",
+  "scripts",
+  "scripts-descriptions",
+]);
+const RELEASE_PULL_PATHS = [
+  ".release-please-manifest.json",
+  "CHANGELOG.md",
 ];
 
 function objectRecord(value, label) {
@@ -44,13 +41,13 @@ function canonicalValue(value) {
 
 export function productionComposerMetadata(composer) {
   const document = objectRecord(composer, "composer.json");
-  const metadata = {};
-  for (const key of PRODUCTION_COMPOSER_KEYS) {
-    if (Object.hasOwn(document, key)) {
-      metadata[key] = document[key];
-    }
-  }
-  return canonicalValue(metadata);
+  return canonicalValue(
+    Object.fromEntries(
+      Object.entries(document).filter(
+        ([key]) => !DEVELOPMENT_ONLY_COMPOSER_KEYS.has(key),
+      ),
+    ),
+  );
 }
 
 export function visibleReleaseTypes(config) {
@@ -105,7 +102,13 @@ export function releaseSignificantChange({ baseComposer, headComposer, paths }) 
   }
   return (
     productionComposerMetadataChanged(baseComposer, headComposer) ||
-    paths.some((path) => typeof path === "string" && path.startsWith("src/"))
+    paths.some(
+      (path) =>
+        typeof path === "string" &&
+        (path.startsWith("src/") ||
+          path === ".gitattributes" ||
+          path === ".release-please-manifest.json"),
+    )
   );
 }
 
@@ -113,6 +116,7 @@ export function assertCanonicalReleasePull({
   author,
   headRef,
   manifest,
+  paths,
   title,
 }) {
   const isCanonical =
@@ -122,6 +126,16 @@ export function assertCanonicalReleasePull({
 
   if (!isCanonical) {
     return false;
+  }
+
+  const normalizedPaths = [...paths].sort();
+  if (
+    JSON.stringify(normalizedPaths) !==
+    JSON.stringify(RELEASE_PULL_PATHS)
+  ) {
+    throw new Error(
+      "canonical Release Please pull request changed non-generated files",
+    );
   }
 
   const document = objectRecord(manifest, ".release-please-manifest.json");
@@ -154,6 +168,7 @@ export function assertReleaseClassification({
       author: prAuthor,
       headRef: prHeadRef,
       manifest,
+      paths,
       title,
     })
   ) {
