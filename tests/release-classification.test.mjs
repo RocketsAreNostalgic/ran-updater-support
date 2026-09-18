@@ -30,7 +30,10 @@ const releaseConfig = {
 };
 
 const baseComposer = {
-  require: { php: "^8.2" },
+  require: {
+    php: "^8.2",
+    "ext-json": "*",
+  },
   "require-dev": { "phpstan/phpstan": "^2.1" },
 };
 
@@ -64,12 +67,15 @@ test("parses scoped and breaking Conventional Commit titles", () => {
 test("production requirement comparison ignores key order and require-dev", () => {
   assert.equal(productionRequirementsChanged(baseComposer, {
     ...baseComposer,
-    require: { php: "^8.2" },
+    require: {
+      "ext-json": "*",
+      php: "^8.2",
+    },
     "require-dev": { "phpstan/phpstan": "^3.0" },
   }), false);
   assert.equal(productionRequirementsChanged(baseComposer, {
     ...baseComposer,
-    require: { php: "^8.3" },
+    require: { ...baseComposer.require, php: "^8.3" },
   }), true);
 });
 
@@ -81,7 +87,10 @@ test("source and production requirements are release-significant", () => {
   }), true);
   assert.equal(releaseSignificantChange({
     baseComposer,
-    headComposer: { ...baseComposer, require: { php: "^8.3" } },
+    headComposer: {
+      ...baseComposer,
+      require: { ...baseComposer.require, php: "^8.3" },
+    },
     paths: ["composer.json"],
   }), true);
   assert.equal(releaseSignificantChange({
@@ -165,6 +174,41 @@ test("CLI verifies exact head and merge-base-to-head classification", () => {
       RAN_RELEASE_HEAD_SHA: baseSha,
       RAN_RELEASE_PR_TITLE: "fix: wrong checkout",
     }), /does not match pull request head/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI treats newline-containing source paths as release-significant", () => {
+  const root = mkdtempSync(
+    join(tmpdir(), "updater-support-release-classification-newline-"),
+  );
+  try {
+    git(root, ["init", "--initial-branch=main"]);
+    git(root, ["config", "user.name", "Release Test"]);
+    git(root, ["config", "user.email", "release@example.invalid"]);
+    writeJson(join(root, "composer.json"), baseComposer);
+    writeJson(join(root, "release-please-config.json"), releaseConfig);
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "chore: base"]);
+    const baseSha = git(root, ["rev-parse", "HEAD"]);
+
+    mkdirSync(join(root, "src"));
+    const path = join(root, "src", "Line\nBreak.php");
+    writeFileSync(path, "<?php\n");
+    git(root, ["add", "src"]);
+    git(root, ["commit", "-m", "refactor: source path"]);
+    const headSha = git(root, ["rev-parse", "HEAD"]);
+
+    assert.throws(
+      () =>
+        runCli(root, {
+          RAN_RELEASE_BASE_SHA: baseSha,
+          RAN_RELEASE_HEAD_SHA: headSha,
+          RAN_RELEASE_PR_TITLE: "refactor: source path",
+        }),
+      /release-significant updater-support changes require/,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
