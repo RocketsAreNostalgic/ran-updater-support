@@ -352,6 +352,7 @@ export function runCli(root = process.cwd(), env = process.env) {
       : undefined,
     headRepository,
     headRepositoryId,
+    headSha,
     mergeBaseSha: classificationBaseSha,
     releaseConfig: readJsonAt(root, baseSha, "release-please-config.json"),
     paths: changedPaths(root, classificationBaseSha, headSha),
