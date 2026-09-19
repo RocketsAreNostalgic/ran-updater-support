@@ -4,13 +4,15 @@ on:
   pull_request_target:
     branches: [main]
     types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+  repository_dispatch:
+    types: [trusted-release-classification]
 
 permissions:
   contents: read
   pull-requests: read
 
 concurrency:
-  group: trusted-release-classification-${{ github.event.pull_request.number }}
+  group: trusted-release-classification-${{ github.event.pull_request.number || github.event.client_payload.pull_request_number }}
   cancel-in-progress: true
 
 jobs:
@@ -23,9 +25,14 @@ jobs:
         id: pr
         env:
           GH_TOKEN: ${{ github.token }}
-          RAN_PR_NUMBER: ${{ github.event.pull_request.number }}
+          RAN_PR_NUMBER: ${{ github.event.pull_request.number || github.event.client_payload.pull_request_number }}
+          RAN_EXPECTED_HEAD_SHA: ${{ github.event.client_payload.expected_head_sha || '' }}
         run: |
           set -euo pipefail
+          [[ "$RAN_PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          if [[ "$GITHUB_EVENT_NAME" = repository_dispatch ]]; then
+            [[ "$RAN_EXPECTED_HEAD_SHA" =~ ^[a-f0-9]{40}$ ]]
+          fi
           pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${RAN_PR_NUMBER}")"
           base_ref="$(jq -er '.base.ref' <<<"$pr")"
           base_repo="$(jq -er '.base.repo.full_name' <<<"$pr")"
@@ -42,7 +49,11 @@ jobs:
           test "$base_repo" = "$GITHUB_REPOSITORY"
           [[ "$base_sha" =~ ^[a-f0-9]{40}$ ]]
           [[ "$head_sha" =~ ^[a-f0-9]{40}$ ]]
+          if [[ -n "$RAN_EXPECTED_HEAD_SHA" ]]; then
+            test "$head_sha" = "$RAN_EXPECTED_HEAD_SHA"
+          fi
           {
+            echo "number=$RAN_PR_NUMBER"
             echo "base_ref=$base_ref"
             echo "base_repo=$base_repo"
             echo "base_sha=$base_sha"
@@ -65,7 +76,7 @@ jobs:
 
       - name: Fetch exact pull request head as data
         env:
-          RAN_PR_NUMBER: ${{ github.event.pull_request.number }}
+          RAN_PR_NUMBER: ${{ steps.pr.outputs.number }}
           RAN_HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
         run: |
           set -euo pipefail
@@ -75,7 +86,7 @@ jobs:
       - name: Re-read live pull request identity
         env:
           GH_TOKEN: ${{ github.token }}
-          RAN_PR_NUMBER: ${{ github.event.pull_request.number }}
+          RAN_PR_NUMBER: ${{ steps.pr.outputs.number }}
           RAN_BASE_REF: ${{ steps.pr.outputs.base_ref }}
           RAN_BASE_REPO: ${{ steps.pr.outputs.base_repo }}
           RAN_BASE_SHA: ${{ steps.pr.outputs.base_sha }}
