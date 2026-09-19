@@ -32,6 +32,44 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+      - name: Dispatch trusted classification for the canonical release PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RAN_RELEASE_BRANCH: release-please--branches--main--components--ran/updater-support
+          RAN_REPOSITORY_ID: ${{ github.repository_id }}
+        run: |
+          set -euo pipefail
+          pulls="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100")"
+          matches="$(
+            jq -c               --arg branch "$RAN_RELEASE_BRANCH"               --arg repository "$GITHUB_REPOSITORY"               --arg repository_id "$RAN_REPOSITORY_ID"               '[
+                .[]
+                | select(
+                    .head.ref == $branch
+                    and .head.repo.full_name == $repository
+                    and (.head.repo.id | tostring) == $repository_id
+                    and .base.ref == "main"
+                    and .base.repo.full_name == $repository
+                    and .user.login == "github-actions[bot]"
+                  )
+              ]' <<<"$pulls"
+          )"
+          count="$(jq -r 'length' <<<"$matches")"
+          if [[ "$count" = 0 ]]; then
+            echo "No open canonical Release Please pull request requires classification."
+            exit 0
+          fi
+          test "$count" = 1
+          number="$(jq -r '.[0].number' <<<"$matches")"
+          head_sha="$(jq -r '.[0].head.sha' <<<"$matches")"
+          [[ "$number" =~ ^[1-9][0-9]*$ ]]
+          [[ "$head_sha" =~ ^[a-f0-9]{40}$ ]]
+          jq -n             --argjson number "$number"             --arg head_sha "$head_sha"             '{
+              event_type: "trusted-release-classification",
+              client_payload: {
+                pull_request_number: $number,
+                expected_head_sha: $head_sha
+              }
+            }'             | gh api --method POST "repos/${GITHUB_REPOSITORY}/dispatches" --input -
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
