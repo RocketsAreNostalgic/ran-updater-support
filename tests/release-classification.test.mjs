@@ -318,6 +318,51 @@ test("canonical Release Please pull enforces publisher release-note bounds", () 
   );
 });
 
+test("CLI passes the exact head SHA through canonical release validation", () => {
+  const root = mkdtempSync(
+    join(tmpdir(), "updater-support-canonical-release-classification-"),
+  );
+  try {
+    git(root, ["init", "--initial-branch=main"]);
+    git(root, ["config", "user.name", "Release Test"]);
+    git(root, ["config", "user.email", "release@example.invalid"]);
+    writeJson(join(root, "composer.json"), baseComposer);
+    writeJson(join(root, "release-please-config.json"), releaseConfig);
+    writeJson(join(root, ".release-please-manifest.json"), baseManifest);
+    writeFileSync(join(root, "CHANGELOG.md"), baseChangelog, "utf8");
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "chore: release base"]);
+    const baseSha = git(root, ["rev-parse", "HEAD"]);
+
+    writeJson(join(root, ".release-please-manifest.json"), manifest);
+    writeFileSync(join(root, "CHANGELOG.md"), headChangelog, "utf8");
+    git(root, ["add", ".release-please-manifest.json", "CHANGELOG.md"]);
+    git(root, ["commit", "-m", "chore(main): release 0.1.0-beta.4"]);
+    const headSha = git(root, ["rev-parse", "HEAD"]);
+    git(root, ["checkout", baseSha]);
+
+    assert.deepEqual(
+      runCli(root, {
+        RAN_RELEASE_BASE_SHA: baseSha,
+        RAN_RELEASE_HEAD_SHA: headSha,
+        RAN_RELEASE_PR_TITLE: "chore(main): release 0.1.0-beta.4",
+        RAN_RELEASE_PR_HEAD_REF:
+          "release-please--branches--main--components--ran/updater-support",
+        RAN_RELEASE_PR_HEAD_REPOSITORY: repository,
+        RAN_RELEASE_PR_HEAD_REPOSITORY_ID: repositoryId,
+        RAN_RELEASE_PR_PENDING_LABEL: "true",
+        RAN_RELEASE_PR_TAGGED_LABEL: "false",
+        RAN_RELEASE_PR_AUTHOR: "github-actions[bot]",
+        RAN_RELEASE_REPOSITORY: repository,
+        RAN_RELEASE_REPOSITORY_ID: repositoryId,
+      }),
+      { required: true, classification: null, releasePull: true },
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("ordinary pull requests cannot change release metadata", () => {
   for (const path of [".release-please-manifest.json", "CHANGELOG.md"]) {
     assert.throws(
