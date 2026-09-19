@@ -16,4 +16,4 @@ jobs:
       actions: read
       contents: read
       pull-requests: read
-    uses: RocketsAreNostalgic/.github/.github/workflows/release-liveness-observer.yml@e729d3b843cf8c10ac25ca688f6daca8b573aab8
+    uses: RocketsAreNostalgic/.github/.github/workflows/release-liveness-observer.yml@5a90b1ee1537d34b5ad4b3d7f9eb82f08c8faba4
