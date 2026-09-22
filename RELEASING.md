@@ -30,8 +30,7 @@ The variable acknowledges that setting; it does not enable it.
 2. Release Please opens a version PR. Approve its Actions workflow run if GitHub
    requires approval for the bot-created PR; `CI` also supports manual dispatch
    against the exact PR branch. Review the version and complete changelog diff.
-   Prereleases remain on the `0.1.0-beta.*` line unless a reviewed configuration
-   and publisher policy change deliberately advances that line.
+   Prereleases use canonical `MAJOR.MINOR.PATCH-beta.N` versions. Release Please may advance the SemVer core when reviewed release-driving metadata requires it, including an explicit breaking change; the publisher independently verifies monotonic progression and exact release provenance.
 3. Run independent review against the exact PR base and head, resolve findings,
    and present the checks and normal-merge method to the owner. Merge only after
    explicit authorization. Only the manifest version and prepended changelog

@@ -89,7 +89,7 @@ test("candidate binds manifest, Composer identity and release notes", () => {
   assert.equal(identity.tag, `v${VERSION}`);
 });
 
-test("candidate accepts dated linked headings only on the independent beta line", () => {
+test("candidate accepts canonical SemVer beta versions", () => {
   const next = "0.1.0-beta.2";
   const linked = {
     ...contents(next),
@@ -97,6 +97,9 @@ test("candidate accepts dated linked headings only on the independent beta line"
   };
   assert.equal(candidateIdentity(linked, SHA).version, next);
   for (const version of ["0.2.0-beta.1", "1.0.0-beta.1"]) {
+    assert.equal(candidateIdentity(contents(version), SHA).version, version);
+  }
+  for (const version of ["01.0.0-beta.1", "1.0.0-beta.01", "1.0.0", "v1.0.0-beta.1"]) {
     refusal("release_manifest_invalid", () => candidateIdentity(contents(version), SHA));
   }
 });
@@ -146,8 +149,14 @@ test("only exact green CI normal merge and changed paths can publish", () => {
   );
   refusal("main_moved", () => decidePublication({ ...input, mainSha: undefined }));
   for (const parentVersion of ["0.2.0-beta.1", "1.0.0-beta.1"]) {
-    refusal("release_parent_version_invalid", () =>
-      decidePublication({ ...input, commit: { ...input.commit, parentVersion } })
+    assert.deepEqual(
+      decidePublication({
+        ...input,
+        identity: { ...input.identity, version: "2.0.0-beta.1" },
+        pulls: [{ ...pull(), title: "chore(main): release 2.0.0-beta.1" }],
+        commit: { ...input.commit, parentVersion },
+      }),
+      { action: "create_release", pullNumber: 7 },
     );
   }
 });
@@ -258,6 +267,19 @@ test("initial release must be exactly beta.1 and later releases must advance", (
   refusal("release_version_not_advanced", () => verifyReleaseDelta(contents(), contents()));
   refusal("release_version_not_advanced", () =>
     verifyReleaseDelta(contents("0.1.0-beta.2"), contents())
+  );
+
+  const breaking = "1.0.0-beta.1";
+  const breakingCandidate = {
+    ...contents(breaking),
+    changelog: `# Changelog\n\n## [${breaking}](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v${VERSION}...v${breaking}) (2026-09-03)\n\n### Breaking Changes\n\n* advance contract\n\n${contents().changelog.slice("# Changelog\n\n".length)}`,
+  };
+  assert.deepEqual(verifyReleaseDelta(contents(), breakingCandidate), {
+    parentVersion: VERSION,
+    candidateVersion: breaking,
+  });
+  refusal("release_version_not_advanced", () =>
+    verifyReleaseDelta(contents("9007199254740993.0.0-beta.1"), contents("9007199254740992.1.0-beta.1"))
   );
 });
 
