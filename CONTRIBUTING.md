@@ -14,7 +14,7 @@ composer check
 
 `composer check` validates Composer metadata, lints PHP syntax, runs the shared
 RAN PHPCS/PHPCompatibility standards, runs PHPStan over production code, runs
-the archive-safety contract corpus, and runs the release-publisher tests. Add
+the archive-safety contract corpus, and runs the retained release-workflow contract test. Add
 focused contract coverage when changing a public rule. See
 [RELEASING.md](RELEASING.md) before changing release automation or preparing a
 release.
