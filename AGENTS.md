@@ -21,6 +21,9 @@ actually claims one.
 - `composer check` must retain strict manifest validation, PHP syntax lint,
   shared PHPCS/PHPCompatibility checks, PHPStan, and the package's existing
   contract and release workflow tests.
+- Use `composer lint:syntax` for parser checks, `composer standards` /
+  `composer standards:fix` for PHPCS/PHPCBF, `composer analyze` for level-8
+  production analysis, and `composer test` for the ordinary test aggregate.
 - Preserve the `RAN\UpdaterSupport\V1` public namespace and independent beta line.
 - Before changing release automation or preparing a release, read `RELEASING.md`.
 - Every pull request needs independent review against its exact base/head SHAs.
