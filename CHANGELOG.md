@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.4](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v0.1.0-beta.3...v0.1.0-beta.4) (2026-09-22)
+
+
+### Bug Fixes
+
+* **release:** accept SemVer prerelease transitions ([#32](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/32)) ([f235c41](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/f235c41f47c38b989fd8fe4b8f4f187bb4ce3456))
+
 ## [0.1.0-beta.3](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v0.1.0-beta.2...v0.1.0-beta.3) (2026-09-15)
 
 
