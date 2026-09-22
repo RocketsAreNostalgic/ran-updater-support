@@ -65,14 +65,12 @@ or own temporary files, permissions, cleanup, credentials or deployment state.
 
 Run `composer install`, then `composer check` with PHP 8.2 and Node 24.11.0.
 Composer consumes the package through its Git version; `composer.json` deliberately
-has no version field. Release Please may advance the release manifest before the
-separate publisher successfully creates the corresponding immutable GitHub
-release. A manifest version is therefore release-preparation state, not proof that
-that version is available to Composer consumers; published tags/releases are the
-availability boundary.
+has no version field. The repository now uses the organisation-owned Profile A
+release lifecycle: Release Please owns version selection, changelog, release PR,
+tag, and GitHub Release creation after exact-main CI admission. Published
+tags/releases remain the availability boundary for Composer consumers.
 
-See [RELEASING.md](RELEASING.md) for the independent beta release process and
-fail-closed handling when a prepared release is not published.
+See [RELEASING.md](RELEASING.md) for the shared Profile A beta release process.
 
 ## Community
 
