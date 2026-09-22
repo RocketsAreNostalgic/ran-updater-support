@@ -20,7 +20,7 @@ test("release workflow is a thin pinned Profile A caller", () => {
   assert.match(workflow, /permissions: \{\}/);
   assert.match(
     workflow,
-    /uses: RocketsAreNostalgic\/\.github\/\.github\/workflows\/release-profile-a\.yml@289352e08cdf10b15d07c4e1c890f385afc3d3f5/,
+    /^\s{4}uses: RocketsAreNostalgic\/\.github\/\.github\/workflows\/release-profile-a\.yml@289352e08cdf10b15d07c4e1c890f385afc3d3f5$/m,
   );
   assert.match(workflow, /expected-workflow-path: \.github\/workflows\/ci\.yml/);
   assert.match(
