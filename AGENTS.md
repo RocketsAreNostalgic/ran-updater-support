@@ -8,8 +8,9 @@ with equivalent behavior; keep updater orchestration in its owning package.
 
 This repository uses the RAN `php-library` quality profile. PHP coding and
 compatibility ancestry comes from `ran/coding-standards` through
-`RANWordPressLibrary`; the tracked Composer lock binds the reviewed candidate
-revision until the shared package receives its first versioned release.
+`RANWordPressLibrary`; the tracked Composer lock binds the published v1.0.0 release
+under the `^1.0` development constraint. The additional `RANOwnedMethods`
+check remains explicitly opt-in; this version adoption does not activate it.
 
 Keep package identity and applicability local: the `RAN\UpdaterSupport\V1`
 namespace, PHP `^8.2` support range, source paths, tests, and any future narrow
