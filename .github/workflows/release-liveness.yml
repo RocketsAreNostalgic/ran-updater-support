@@ -1,0 +1,19 @@
+name: Release Liveness
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/release-liveness.yml
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  observe:
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    uses: RocketsAreNostalgic/.github/.github/workflows/release-liveness-observer.yml@86931f84ceb4af1a1c8ee20dc8b735d738e2a5b7
