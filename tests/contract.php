@@ -18,7 +18,7 @@ foreach ( $fixture['paths'] as $name => $case ) {
 }
 foreach ( $fixture['metadata'] as $name => $case ) {
 	[$origin, $attributes, $directory, $expected] = $case;
-	if ( ArchiveSafety::entry_type_failure( $origin, $attributes, $directory ) !== $expected ) {
+	if ( ArchiveSafety::entry_type_failure( origin_os: $origin, attributes: $attributes, directory: $directory ) !== $expected ) {
 		// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- dependency-free CLI contract failure only.
 		throw new RuntimeException( "metadata fixture failed: {$name}" );
 	}
