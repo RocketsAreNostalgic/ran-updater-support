@@ -9,8 +9,12 @@ with equivalent behavior; keep updater orchestration in its owning package.
 This repository uses the RAN `php-library` quality profile. PHP coding and
 compatibility ancestry comes from `ran/coding-standards` through
 `RANWordPressLibrary`; the tracked Composer lock binds the published v1.0.0 release
-under the `^1.0` development constraint. The additional `RANOwnedMethods`
-check remains explicitly opt-in; this version adoption does not activate it.
+under the `^1.0` development constraint. This repository explicitly enables
+`RANOwnedMethods` across its existing first-party PHP scope, including tests.
+Owned methods must use ASCII snake_case even in derived/implementing classes.
+Required external signatures need a justified method-local suppression;
+inheritance is not a blanket naming exception. `composer test:standards`
+checks this enforcement through the repository ruleset.
 
 Keep package identity and applicability local: the `RAN\UpdaterSupport\V1`
 namespace, PHP `^8.2` support range, source paths, tests, and any future narrow

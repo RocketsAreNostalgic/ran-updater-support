@@ -15,6 +15,7 @@
 	<arg value="sp"/>
 
 	<rule ref="RANWordPressLibrary"/>
+	<rule ref="RANOwnedMethods"/>
 
 	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
 		<exclude-pattern>/tests/</exclude-pattern>
