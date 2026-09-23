@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0-beta.4](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v0.1.0-beta.4...v1.0.0-beta.4) (2026-09-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* align Support API names with WordPress conventions ([#37](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/37))
+
+### Code Refactoring
+
+* align Support API names with WordPress conventions ([#37](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/37)) ([7b15fa0](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/7b15fa01d8d9c1bc73cec28b64af12d7c95b7cfc))
+
 ## [0.1.0-beta.4](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v0.1.0-beta.3...v0.1.0-beta.4) (2026-09-22)
 
 
