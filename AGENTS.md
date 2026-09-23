@@ -20,19 +20,15 @@ actually claims one.
 - Run `composer check` before committing and retain consumer contract fixtures.
 - `composer check` must retain strict manifest validation, PHP syntax lint,
   shared PHPCS/PHPCompatibility checks, PHPStan, and the package's existing
-  contract/release-publisher tests.
+  contract and release workflow tests.
+- Use `composer lint:syntax` for parser checks, `composer standards` /
+  `composer standards:fix` for PHPCS/PHPCBF, `composer analyze` for level-8
+  production analysis, and `composer test` for the ordinary test aggregate.
 - Preserve the `RAN\UpdaterSupport\V1` public namespace and independent beta line.
 - Before changing release automation or preparing a release, read `RELEASING.md`.
 - Every pull request needs independent review against its exact base/head SHAs.
 - Merging requires explicit owner authorization of the exact PR and merge method.
-  For ordinary iterative or agent-developed PRs, prefer squash so the reviewed
-  PR lands as one meaningful default-branch commit. Use a merge commit only when
-  the PR's internal commit sequence is deliberately meaningful and worth
-  preserving. Rebase merge is not part of the normal RAN workflow. Generated
-  Release Please version PRs are a required exception: merge them with a normal
-  two-parent merge commit, because the release publisher verifies the exact base
-  parent, Release Please head parent, and resulting tree and refuses squash or
-  rebase merges.
+  For ordinary iterative or agent-developed PRs, prefer squash so the reviewed PR lands as one meaningful default-branch commit. Use a merge commit only when the PR's internal commit sequence is deliberately meaningful and worth preserving. Rebase merge is not part of the normal RAN workflow. Release Please version PRs follow the repository's approved merge policy; publication no longer depends on a special two-parent merge geometry.
 - Keep credentials, local logs, vendor files and internal planning out of commits.
 
 ## Blacksmith AI prohibition

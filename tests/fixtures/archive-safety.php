@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-$pathBytes = static function ( int $length ): string {
+$path_bytes = static function ( int $length ): string {
 	$parts = array();
 	while ( $length > 255 ) {
 		$part    = min( 255, $length - 2 );
@@ -88,34 +88,34 @@ return array(
 		),
 		'component 256'          => array( str_repeat( 'a', 256 ), null ),
 		'path 1024'              => array(
-			$pathBytes( 1024 ),
+			$path_bytes( 1024 ),
 			array(
-				'path'      => $pathBytes( 1024 ),
+				'path'      => $path_bytes( 1024 ),
 				'directory' => false,
 			),
 		),
 		'path 1025'              => array(
-			$pathBytes( 1025 ),
+			$path_bytes( 1025 ),
 			array(
-				'path'      => $pathBytes( 1025 ),
+				'path'      => $path_bytes( 1025 ),
 				'directory' => false,
 			),
 		),
 		'path 2048'              => array(
-			$pathBytes( 2048 ),
+			$path_bytes( 2048 ),
 			array(
-				'path'      => $pathBytes( 2048 ),
+				'path'      => $path_bytes( 2048 ),
 				'directory' => false,
 			),
 		),
 		'path 4096'              => array(
-			$pathBytes( 4096 ),
+			$path_bytes( 4096 ),
 			array(
-				'path'      => $pathBytes( 4096 ),
+				'path'      => $path_bytes( 4096 ),
 				'directory' => false,
 			),
 		),
-		'path 4097'              => array( $pathBytes( 4097 ), null ),
+		'path 4097'              => array( $path_bytes( 4097 ), null ),
 	),
 	'metadata'   => array(
 		'missing origin'                       => array( null, 0, false, 'entry_metadata_invalid' ),

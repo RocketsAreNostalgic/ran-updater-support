@@ -2,9 +2,9 @@
 
 `ran/updater-support` provides shared contracts and utilities for RAN updater packages. Its first component is a pure PHP 8.2 archive-safety contract. This component performs no ZIP, filesystem, network, or custody work.
 
-`ArchiveSafety::normalizePath()` accepts printable ASCII relative paths with one optional trailing slash. It rejects traversal, empty components, Windows-reserved names, unsafe punctuation, trailing spaces or dots, and paths or components over the documented byte limits.
+`ArchiveSafety::normalize_path()` accepts printable ASCII relative paths with one optional trailing slash. It rejects traversal, empty components, Windows-reserved names, unsafe punctuation, trailing spaces or dots, and paths or components over the documented byte limits.
 
-`entryTypeFailure()` accepts only ZIP origin OS values DOS (`0`) and UNIX (`3`). Unknown origins are rejected because the package does not guess external-attribute semantics. UNIX accepts unspecified, regular, and directory modes; DOS accepts unspecified file flags or a matching directory bit, and rejects volume labels. `collisionFailure()` detects case-insensitive duplicate paths and files used as ancestors while allowing explicit or implicit directories.
+`entry_type_failure()` accepts only ZIP origin OS values DOS (`0`) and UNIX (`3`). Unknown origins are rejected because the package does not guess external-attribute semantics. UNIX accepts unspecified, regular, and directory modes; DOS accepts unspecified file flags or a matching directory bit, and rejects volume labels. `collision_failure()` detects case-insensitive duplicate paths and files used as ancestors while allowing explicit or implicit directories.
 
 ## Contract and usage
 
@@ -16,24 +16,24 @@ actual destination and filesystem capabilities.
 ```php
 use RAN\UpdaterSupport\V1\ArchiveSafety;
 
-$entry = ArchiveSafety::normalizePath('example/assets/icon.svg');
+$entry = ArchiveSafety::normalize_path('example/assets/icon.svg');
 if ($entry === null) {
     throw new InvalidArgumentException('Unsafe archive path.');
 }
 
-$failure = ArchiveSafety::entryTypeFailure(
-    originOs: 3,
+$failure = ArchiveSafety::entry_type_failure(
+    origin_os: 3,
     attributes: 0100644 << 16,
     directory: false,
 );
 
-$collision = ArchiveSafety::collisionFailure([
+$collision = ArchiveSafety::collision_failure([
     ['path' => 'example', 'directory' => true],
     $entry,
 ]);
 ```
 
-Only pass successfully normalized entry facts to `collisionFailure()`. It returns
+Only pass successfully normalized entry facts to `collision_failure()`. It returns
 `path_duplicate`, `file_parent_collision`, or `null`. Metadata validation returns
 `entry_metadata_invalid`, `entry_type_unsupported`, or `null`; unavailable
 metadata differs from valid zero attributes. Consumers retain their own outward
@@ -65,14 +65,12 @@ or own temporary files, permissions, cleanup, credentials or deployment state.
 
 Run `composer install`, then `composer check` with PHP 8.2 and Node 24.11.0.
 Composer consumes the package through its Git version; `composer.json` deliberately
-has no version field. Release Please may advance the release manifest before the
-separate publisher successfully creates the corresponding immutable GitHub
-release. A manifest version is therefore release-preparation state, not proof that
-that version is available to Composer consumers; published tags/releases are the
-availability boundary.
+has no version field. The repository now uses the organisation-owned Profile A
+release lifecycle: Release Please owns version selection, changelog, release PR,
+tag, and GitHub Release creation after exact-main CI admission. Published
+tags/releases remain the availability boundary for Composer consumers.
 
-See [RELEASING.md](RELEASING.md) for the independent beta release process and
-fail-closed handling when a prepared release is not published.
+See [RELEASING.md](RELEASING.md) for the shared Profile A beta release process.
 
 ## Community
 
