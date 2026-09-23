@@ -11,35 +11,35 @@ use RAN\UpdaterSupport\V1\RepositoryRelativePath;
 $fixture = require __DIR__ . '/fixtures/archive-safety.php';
 foreach ( $fixture['paths'] as $name => $case ) {
 	[$input, $expected] = $case;
-	if ( ArchiveSafety::normalizePath( $input ) !== $expected ) {
+	if ( ArchiveSafety::normalize_path( $input ) !== $expected ) {
 		// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- dependency-free CLI contract failure only.
 		throw new RuntimeException( "path fixture failed: {$name}" );
 	}
 }
 foreach ( $fixture['metadata'] as $name => $case ) {
 	[$origin, $attributes, $directory, $expected] = $case;
-	if ( ArchiveSafety::entryTypeFailure( $origin, $attributes, $directory ) !== $expected ) {
+	if ( ArchiveSafety::entry_type_failure( origin_os: $origin, attributes: $attributes, directory: $directory ) !== $expected ) {
 		// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- dependency-free CLI contract failure only.
 		throw new RuntimeException( "metadata fixture failed: {$name}" );
 	}
 }
 foreach ( $fixture['collisions'] as $name => $case ) {
 	[$entries, $expected] = $case;
-	if ( ArchiveSafety::collisionFailure( $entries ) !== $expected ) {
+	if ( ArchiveSafety::collision_failure( $entries ) !== $expected ) {
 		// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- dependency-free CLI contract failure only.
 		throw new RuntimeException( "collision fixture failed: {$name}" );
 	}
 }
 
-$repositoryPaths = require __DIR__ . '/fixtures/repository-relative-path.php';
-foreach ( $repositoryPaths['valid'] as $name => $case ) {
+$repository_paths = require __DIR__ . '/fixtures/repository-relative-path.php';
+foreach ( $repository_paths['valid'] as $name => $case ) {
 	[$input, $expected] = $case;
 	if ( RepositoryRelativePath::normalize( $input ) !== $expected ) {
 		// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- dependency-free CLI contract failure only.
 		throw new RuntimeException( "repository-relative path fixture failed: {$name}" );
 	}
 }
-foreach ( $repositoryPaths['invalid'] as $name => $input ) {
+foreach ( $repository_paths['invalid'] as $name => $input ) {
 	try {
 		RepositoryRelativePath::normalize( $input );
 	} catch ( InvalidArgumentException ) {

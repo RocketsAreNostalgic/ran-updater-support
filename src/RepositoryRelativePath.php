@@ -46,13 +46,13 @@ final class RepositoryRelativePath {
 				throw self::invalid();
 			}
 
-			self::assertDecodedSegmentIsSafe( $segment, 0 === $index );
+			self::assert_decoded_segment_is_safe( $segment, 0 === $index );
 		}
 
 		return implode( '/', $segments );
 	}
 
-	private static function assertDecodedSegmentIsSafe( string $segment, bool $firstSegment ): void {
+	private static function assert_decoded_segment_is_safe( string $segment, bool $first_segment ): void {
 		$decoded = $segment;
 
 		for ( $pass = 0; $pass < self::MAX_DECODE_PASSES; ++$pass ) {
@@ -68,7 +68,7 @@ final class RepositoryRelativePath {
 				|| '..' === $decoded
 				|| str_contains( $decoded, '/' )
 				|| str_contains( $decoded, '\\' )
-				|| ( $firstSegment && 1 === preg_match( '/^[A-Za-z]:/', $decoded ) )
+				|| ( $first_segment && 1 === preg_match( '/^[A-Za-z]:/', $decoded ) )
 				|| 1 === preg_match( '/[\x00-\x1F\x7F]/', $decoded ) ) {
 				throw self::invalid();
 			}
