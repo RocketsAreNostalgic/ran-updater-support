@@ -1,8 +1,6 @@
 # Contributing
 
-This package is in a fresh pre-release development line. Keep every change safe
-for public review and use Conventional Commits (`feat:`, `fix:`, `docs:`,
-`test:`, or `chore:`) so Release Please can prepare version proposals.
+This package is in a pre-release development line. Keep every change safe for public review. Use a Conventional Commit pull-request title so an ordinary squash merge uses that title as the subject consumed by Release Please, rather than the individual branch commit subjects. Choose the release classification from this repository's release configuration and [RELEASING.md](RELEASING.md); hidden documentation/test/chore types do not independently drive a release. A deliberately approved merge commit preserves individual commits, so their Conventional Commit subjects remain release inputs.
 
 Use PHP 8.2 and Node.js 24.11.0. Install Composer dependencies, then run the
 repository gate:
