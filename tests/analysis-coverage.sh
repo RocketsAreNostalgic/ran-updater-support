@@ -26,8 +26,16 @@ php "$root/tests/analysis-coverage.php" "$fixture"
 for path in NewContract.PHP contract-tool; do
     printf '#!/usr/bin/env php\n<?php\n' > "$fixture/$path"
     if php "$root/tests/analysis-coverage.php" "$fixture" > "$fixture/guard.log" 2>&1; then exit 1; fi
-    grep -Eq 'Unsupported PHP extension|Extensionless PHP' "$fixture/guard.log"
+    grep -Eq 'Unsupported PHP extension|Nonstandard-extension PHP' "$fixture/guard.log"
     rm "$fixture/$path"
+done
+for header in '<?PHP' '<?='; do
+    for path in contract-tool contract.inc; do
+        printf '%s\n' "$header" > "$fixture/$path"
+        if php "$root/tests/analysis-coverage.php" "$fixture" > "$fixture/guard.log" 2>&1; then exit 1; fi
+        grep -q 'Nonstandard-extension PHP' "$fixture/guard.log"
+        rm "$fixture/$path"
+    done
 done
 # CLI removes production registered as a stub after FileFinder selection.
 printf '\tstubFiles:\n\t\t- moved-contract.php\n' >> "$fixture/phpstan.neon"
