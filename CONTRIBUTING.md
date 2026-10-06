@@ -11,7 +11,7 @@ composer check
 ```
 
 `composer check` validates Composer metadata, lints PHP syntax, runs the shared
-RAN PHPCS/PHPCompatibility standards, runs PHPStan over production code, runs
+RAN PHPCS/PHPCompatibility standards, runs PHPStan over production and maintained code, runs
 the archive-safety contract corpus, naming-enforcement regressions, and the
 retained release-workflow contract test. Add
 focused contract coverage when changing a public rule. See
@@ -25,7 +25,7 @@ release.
 | `composer lint:syntax` | PHP syntax in `src/` and `tests/` |
 | `composer standards` | Shared PHPCS/WPCS/PHPCompatibility and RAN-owned method rules |
 | `composer standards:fix` | PHPCBF with the same rules and source paths |
-| `composer analyze` | Blocking PHPStan level 8 over default-inclusive production PHP |
+| `composer analyze` | Blocking PHPStan level 8 over isolated production and all maintained PHP |
 | `composer test` | Archive-safety, naming-enforcement and release-workflow contracts |
 | `composer test:standards` | Positive/negative owned-method checks through the local ruleset |
 
@@ -70,3 +70,30 @@ The current production population is unchanged; no existing omission is claimed.
 The controls also reject production registered as a stub and prove excluded
 fixture constants do not leak through symbol scanning; analyse-only exclusion
 deliberately demonstrates the unsafe contrast.
+
+
+## All maintained PHP acceptance (#65 / #128)
+
+The production profile above remains unchanged to preserve its isolation from
+synthetic fixture declarations. The additional `phpstan-maintained.neon` profile
+analyzes all six maintained PHP files at level 8, including all four previously
+excluded test/fixture/guard files. `composer analyze` requires both profiles; new
+root/nested tests and scripts enter maintained analysis automatically. Dependencies,
+Git metadata and disposable `.workspaces` are the only root role exclusions.
+No maintained file exemption or baseline is added. The existing coverage contract
+checks both effective populations after stub-file removal, exact level and commands,
+and rejects new analysis suppressions. Negative controls cover new test/script
+errors, reduced level, restored test exclusions and developer files marked as stubs.
+
+The coverage guard deliberately uses the locked analyzer's actual NeonAdapter and
+FileExcluder implementation to mirror effective discovery. Three occurrence-local
+annotations suppress exactly four `phpstanApi.constructor` / `phpstanApi.method`
+compatibility notifications, with an exact comment inventory checked against
+maintained PHP. They acknowledge reliance on locked internal tooling, not errors in
+source inference. All other diagnostics remain enabled; an immediately outside
+unannotated API call must report its compatibility diagnostic, and an unreviewed
+annotated copy must fail the inventory. A dependency update must requalify these
+existing effective-discovery and actual-analyzer contracts. Two failed-read paths
+in the guard now stop explicitly rather than passing false to parser functions.
+Production PHP, public APIs, dependencies and runtime behavior are unchanged.
+This bounded analysis change does not certify the separate PHPCS suppression policy.
