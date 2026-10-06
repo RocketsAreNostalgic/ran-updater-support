@@ -2,7 +2,12 @@ parameters:
 	level: 8
 	treatPhpDocTypesAsCertain: false
 	paths:
-		- src
+		- .
+	# Repository-root development/dependency roles; nested product paths remain included.
 	excludePaths:
-		analyse:
-			- tests
+		analyseAndScan:
+			- tests/*
+			- vendor/*
+			- node_modules/*
+			- .git/*
+			- .workspaces/*

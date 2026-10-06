@@ -41,10 +41,12 @@
     "test:release-control": "node --test tests/release-workflow-contract.test.mjs",
     "lint:syntax": "bash -o pipefail -c 'find src tests -type f -name \"*.php\" -print0 | xargs -0 -n1 php -l'",
     "test": [
+      "@test:analysis-coverage",
       "@test:contract",
       "@test:standards",
       "@test:release-control"
-    ]
+    ],
+    "test:analysis-coverage": "bash tests/analysis-coverage.sh"
   },
   "config": {
     "platform": {

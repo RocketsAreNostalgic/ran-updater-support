@@ -25,7 +25,7 @@ release.
 | `composer lint:syntax` | PHP syntax in `src/` and `tests/` |
 | `composer standards` | Shared PHPCS/WPCS/PHPCompatibility and RAN-owned method rules |
 | `composer standards:fix` | PHPCBF with the same rules and source paths |
-| `composer analyze` | Blocking PHPStan level 8 over `src/` |
+| `composer analyze` | Blocking PHPStan level 8 over default-inclusive production PHP |
 | `composer test` | Archive-safety, naming-enforcement and release-workflow contracts |
 | `composer test:standards` | Positive/negative owned-method checks through the local ruleset |
 
@@ -57,3 +57,13 @@ this does not declare acceptance of unrelated exception families.
 Variable exceptions are confined to existing source files with a reasoned
 `NonPrefixedVariableFound` annotation. No path-wide prefix exception remains;
 new test/view files and nested production `tests`/`views` paths are checked.
+
+## Default-inclusive production analysis
+
+Root analysis includes future root, nested, split and moved production PHP. Only
+root tests, vendor, node_modules, Git metadata and disposable .workspaces are
+excluded from analysis and symbol scanning. Nested product directories retain
+coverage. `test:analysis-coverage` compares independent recursive discovery with
+locked PHPStan FileFinder and exercises real missing-function negatives outside
+the former src root. Uppercase and extensionless PHP fail for explicit review.
+The current production population is unchanged; no existing omission is claimed.
