@@ -29,6 +29,20 @@ for path in NewContract.PHP contract-tool; do
     grep -Eq 'Unsupported PHP extension|Extensionless PHP' "$fixture/guard.log"
     rm "$fixture/$path"
 done
+# CLI removes production registered as a stub after FileFinder selection.
+printf '\tstubFiles:\n\t\t- moved-contract.php\n' >> "$fixture/phpstan.neon"
+if php "$root/tests/analysis-coverage.php" "$fixture" > "$fixture/guard.log" 2>&1; then exit 1; fi
+grep -q 'Effective PHPStan selection differs' "$fixture/guard.log"
+cp "$root/phpstan.neon" "$fixture/phpstan.neon"
+# Excluded fixture declarations must not pollute production symbol discovery.
+printf '<?php\nconst RAN_SUPPORT_FIXTURE_ONLY = 1;\n' > "$fixture/tests/development.php"
+printf '<?php\necho RAN_SUPPORT_FIXTURE_ONLY;\n' > "$fixture/scan-isolation.php"
+if analyze > "$fixture/isolation.json" 2> "$fixture/isolation.log"; then exit 1; fi
+grep -q 'RAN_SUPPORT_FIXTURE_ONLY' "$fixture/isolation.json"
+sed -i 's/analyseAndScan:/analyse:/' "$fixture/phpstan.neon"
+analyze > "$fixture/leaked.json"
+rm "$fixture/scan-isolation.php"
+cp "$root/phpstan.neon" "$fixture/phpstan.neon"
 sed -i 's/- \.$/- src/' "$fixture/phpstan.neon"
 if php "$root/tests/analysis-coverage.php" "$fixture" > "$fixture/guard.log" 2>&1; then exit 1; fi
 grep -q 'Review inclusive analysis scope' "$fixture/guard.log"

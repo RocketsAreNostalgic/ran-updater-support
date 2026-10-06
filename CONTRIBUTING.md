@@ -47,7 +47,7 @@ non-sensitive work; follow [SECURITY.md](SECURITY.md) for vulnerabilities and
 
 ## Global prefix boundary
 
-Two existing fixture/contract files locally except only `PrefixAllGlobals.NonPrefixedVariableFound`: standalone
+Existing fixture/contract files and the standalone discovery helper locally except only `PrefixAllGlobals.NonPrefixedVariableFound`: standalone
 contract runners and returned fixture arrays use local variables. Functions,
 classes, constants and namespaces remain subject to the configured prefix rule,
 including future test and root PHP files. The existing actual-checker regression
@@ -64,6 +64,9 @@ Root analysis includes future root, nested, split and moved production PHP. Only
 root tests, vendor, node_modules, Git metadata and disposable .workspaces are
 excluded from analysis and symbol scanning. Nested product directories retain
 coverage. `test:analysis-coverage` compares independent recursive discovery with
-locked PHPStan FileFinder and exercises real missing-function negatives outside
+locked PHPStan FileFinder plus CLI stub-file removal and exercises real missing-function negatives outside
 the former src root. Uppercase and extensionless PHP fail for explicit review.
 The current production population is unchanged; no existing omission is claimed.
+The controls also reject production registered as a stub and prove excluded
+fixture constants do not leak through symbol scanning; analyse-only exclusion
+deliberately demonstrates the unsafe contrast.

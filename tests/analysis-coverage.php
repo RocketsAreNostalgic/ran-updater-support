@@ -52,6 +52,9 @@ $temp = sys_get_temp_dir() . '/ran-support-analysis-' . bin2hex( random_bytes( 1
 try {
 	$container = ( new PHPStan\DependencyInjection\ContainerFactory( $root ) )->create( $temp, array( $root . '/phpstan.neon' ), array() );
 	$actual    = $container->getService( 'fileFinderAnalyse' )->findFiles( $container->getParameter( 'paths' ) )->getFiles();
+	// Match the locked CLI's post-discovery removal of stub files.
+	$stub_excluder = new PHPStan\File\FileExcluder( $container->getByType( PHPStan\File\FileHelper::class ), $container->getParameter( 'stubFiles' ) );
+	$actual        = array_filter( $actual, static fn( string $file ): bool => ! $stub_excluder->isExcludedFromAnalysing( $file ) );
 	if ( array() !== array_diff( $expected, $actual ) || array() !== array_diff( $actual, $expected ) ) {
 		throw new RuntimeException( 'Effective PHPStan selection differs from independently discovered production PHP.' );
 	}
