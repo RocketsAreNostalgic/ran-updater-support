@@ -7,9 +7,9 @@ import test from "node:test";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const sniff = "RANOwnedMethods.NamingConventions.ValidMethodName";
 
-function check(source, selectedSniff = sniff, path = "src/NamingProbe.php") {
+function check(source, selectedSniff = sniff, path = "src/NamingProbe.php", standard = ".phpcs.xml") {
   const result = spawnSync("php", [
-    "vendor/bin/phpcs", "--standard=.phpcs.xml", `--sniffs=${selectedSniff}`,
+    "vendor/bin/phpcs", `--standard=${standard}`, ...(selectedSniff === null ? [] : [`--sniffs=${selectedSniff}`]),
     "-q", "--no-colors", "--report=json", `--stdin-path=${root}${path}`, "-",
   ], { cwd: root, input: source, encoding: "utf8", timeout: 60000 });
   assert.ifError(result.error);
@@ -35,6 +35,51 @@ class ExternalTest extends \\PHPUnit\\Framework\\TestCase {
 
 test("repository rules accept snake_case, magic methods and a narrow external signature", () => {
   assert.deepEqual(check(compliant), { status: 0, messages: [] });
+});
+
+// These probes must use the canonical profile without a CLI sniff override:
+// an override can undo a narrowing argument in XML and conceal a broken gate.
+const canonicalProbe = `<?php
+function unowned_probe() {}
+class UnownedProbe { public function badName() {} }
+const UNOWNED_PROBE = 1;
+$local_value = 1;
+`;
+const canonicalCodes = [
+  `${sniff}.NotSnakeCase`,
+  ...["Class", "Constant", "Function", "Variable"].map(kind =>
+    `WordPress.NamingConventions.PrefixAllGlobals.NonPrefixed${kind}Found`),
+];
+function assertCanonicalNaming(result, path) {
+  for (const code of canonicalCodes) {
+    assert.ok(result.messages.some(message => message.source === code), `${path}: canonical profile lost ${code}`);
+  }
+}
+
+test("canonical profile enforces naming without test-only sniff overrides", () => {
+  for (const path of ["src/NamingProbe.php", "tests/NamingProbe.php", "tests/fixtures/NamingProbe.php", "future-root.php"]) {
+    assertCanonicalNaming(check(canonicalProbe, null, path), path);
+  }
+});
+
+test("actual XML narrowing and property changes fail canonical naming controls", () => {
+  const ruleset = readFileSync(root + ".phpcs.xml", "utf8");
+  const path = `standards-probe-${process.pid}-${Date.now()}.xml`;
+  const weakenings = [
+    '<arg name="sniffs" value="WordPress.PHP.YodaConditions"/>',
+    `<arg name="exclude" value="${sniff}"/>`,
+    ...[0, 1, 4].map(severity => `<rule ref="${sniff}"><severity>${severity}</severity></rule>`),
+    '<rule ref="WordPress.NamingConventions.PrefixAllGlobals"><properties><property name="prefixes" type="array"><element value="unowned"/></property></properties></rule>',
+  ];
+  try {
+    for (const weakening of weakenings) {
+      writeFileSync(root + path, ruleset.replace("</ruleset>", weakening + "</ruleset>"));
+      const result = check(canonicalProbe, null, "tests/NamingProbe.php", path);
+      assert.throws(() => assertCanonicalNaming(result, weakening), /canonical profile lost/);
+    }
+  } finally {
+    unlinkSync(root + path);
+  }
 });
 
 test("repository rules reject owned camelCase in plain, derived and implementing classes", () => {

@@ -71,3 +71,8 @@ ancestor selector, legacy directive or inline checker configuration is permitted
 regardless of case. The three current line-2 process-variable prefix disables are
 file-wide for that exact diagnostic only; new annotations need explicit review.
 Do not treat a plausible reason or a green checker run as approval.
+
+Canonical naming controls must also run without a command-line sniff selector.
+Such a selector can override narrowing XML arguments and make a disabled gate
+appear covered. Preserve actual root/source/test diagnostics and the real XML
+argument, severity and prefix-property weakening controls.
