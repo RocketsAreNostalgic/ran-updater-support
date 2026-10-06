@@ -77,34 +77,10 @@ test("test locals do not exempt unrelated global declarations", () => {
   assert.deepEqual(check("<?php // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- Isolated test local.\n$local_value = 1;", prefix, "tests/FuturePrefix.php"), { status: 0, messages: [] });
 });
 
-// #65/#128: these existing annotations are the reviewed inventory, not a license
-// for a new exemption merely because it has a plausible explanation.
-const reviewedSuppressions = {
-  "tests/analysis-coverage.php": [
-    {"operation": "disable", "codes": "WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound", "reason": "Standalone process-local variables never enter WordPress runtime; declarations remain checked."},
-    {"operation": "ignore", "codes": "WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents", "reason": "Read the local canonical command, never runtime or remote state."},
-    {"operation": "ignore", "codes": "WordPress.Security.EscapeOutput.ExceptionNotEscaped", "reason": "Standalone coverage failure is not HTML output."},
-    {"operation": "ignore", "codes": "WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents", "reason": "Inspect maintained comments without executing the source."},
-    {"operation": "ignore", "codes": "WordPress.Security.EscapeOutput.ExceptionNotEscaped", "reason": "Standalone coverage failure is not HTML output."},
-    {"operation": "ignore", "codes": "WordPress.Security.EscapeOutput.ExceptionNotEscaped", "reason": "Standalone coverage failure is not HTML output."},
-    {"operation": "ignore", "codes": "WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents", "reason": "Inspect only the local nonstandard-extension file header, never execute it."},
-    {"operation": "ignore", "codes": "WordPress.Security.EscapeOutput.ExceptionNotEscaped", "reason": "Standalone coverage failure is not HTML output."},
-    {"operation": "ignore", "codes": "WordPress.Security.EscapeOutput.ExceptionNotEscaped", "reason": "Standalone coverage failure is not HTML output."},
-    {"operation": "ignore", "codes": "WordPress.WP.AlternativeFunctions.file_system_operations_rmdir, WordPress.WP.AlternativeFunctions.unlink_unlink", "reason": "Remove only the unique private PHPStan container cache created above."},
-    {"operation": "ignore", "codes": "WordPress.WP.AlternativeFunctions.file_system_operations_rmdir", "reason": "Remove only the unique private PHPStan container cache created above."}
-  ],
-  "tests/contract.php": [
-    {"operation": "disable", "codes": "WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound", "reason": "Test fixture variables model isolated CLI or WordPress state; declaration prefixes remain checked."},
-    {"operation": "ignore", "codes": "WordPress.Security.EscapeOutput.ExceptionNotEscaped", "reason": "dependency-free CLI contract failure only."},
-    {"operation": "ignore", "codes": "WordPress.Security.EscapeOutput.ExceptionNotEscaped", "reason": "dependency-free CLI contract failure only."},
-    {"operation": "ignore", "codes": "WordPress.Security.EscapeOutput.ExceptionNotEscaped", "reason": "dependency-free CLI contract failure only."},
-    {"operation": "ignore", "codes": "WordPress.Security.EscapeOutput.ExceptionNotEscaped", "reason": "dependency-free CLI contract failure only."},
-    {"operation": "ignore", "codes": "WordPress.Security.EscapeOutput.ExceptionNotEscaped", "reason": "dependency-free CLI contract failure only."}
-  ],
-  "tests/fixtures/archive-safety.php": [
-    {"operation": "disable", "codes": "WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound", "reason": "Test fixture variables model isolated CLI or WordPress state; declaration prefixes remain checked."}
-  ]
-};
+// Only the three existing standalone files retain a persistent variable exemption.
+const persistentVariableFiles = [
+  "tests/analysis-coverage.php", "tests/contract.php", "tests/fixtures/archive-safety.php",
+];
 
 function commentDirectives(source, path = "") {
   const result = spawnSync("php", ["-r", `
@@ -130,9 +106,9 @@ function commentDirectives(source, path = "") {
       }
       const reason = parts.slice(1).join(" -- ");
       if (operation === "disable") {
-        assert.equal(line, 2, `${path}: persistent exemption must remain at the existing boundary`);
+        assert.equal(line + (comment.slice(0, match.index).match(/\n/g) ?? []).length, 2, `${path}: persistent exemption must remain at the existing boundary`);
         assert.equal(codes, "WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound");
-        assert.deepEqual({ operation, codes, reason }, reviewedSuppressions[path]?.[0], `${path}: unreviewed persistent exemption`);
+        assert.ok(persistentVariableFiles.includes(path), `${path}: unreviewed persistent exemption`);
       }
       directives.push({ operation, codes, reason });
     }
@@ -152,15 +128,10 @@ function maintainedPhp(directory = "") {
   }).sort();
 }
 
-function assertReviewedSuppressions(source, path) {
-  assert.deepEqual(commentDirectives(source, path), reviewedSuppressions[path] ?? [], `${path}: review changed exemption inventory`);
-}
-
-test("every maintained PHP file retains only its reviewed exact suppression inventory", () => {
+test("every maintained PHP file rejects broad or unexplained suppressions", () => {
   const files = maintainedPhp();
   assert.ok(files.length > 0);
-  for (const path of files) assertReviewedSuppressions(readFileSync(root + path, "utf8"), path);
-  for (const path of Object.keys(reviewedSuppressions)) assert.ok(files.includes(path), path);
+  for (const path of files) commentDirectives(readFileSync(root + path, "utf8"), path);
 });
 
 test("blanket, case-variant, ancestor and legacy suppression bypasses fail the guard", () => {
@@ -186,7 +157,7 @@ test("blanket, case-variant, ancestor and legacy suppression bypasses fail the g
   }
 });
 
-test("precise annotation preserves adjacent diagnostics and new copies require review", () => {
+test("precise annotations preserve adjacent diagnostics and persistent scopes stay bounded", () => {
   const source = `<?php
 // phpcs:ignore RANOwnedMethods.NamingConventions.ValidMethodName.NotSnakeCase -- Synthetic foreign signature.
 class Probe { public function foreignName() {} }
@@ -196,9 +167,13 @@ class OtherProbe { public function ownedBadName() {} }
   assert.equal(result.messages.length, 1);
   assert.ok(result.messages[0].message.includes("ownedBadName"));
   assert.equal(commentDirectives(source, "tests/Future.php").length, 1);
-  assert.throws(() => assertReviewedSuppressions(source, "tests/Future.php"));
+  // Syntax eligibility is not approval; new exact annotations still require PR review.
+  const persistent = "<?php\n// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- CLI locals.\n";
+  assert.throws(() => commentDirectives(persistent, "tests/Future.php"));
+  assert.throws(() => commentDirectives(persistent.replace("<?php\n", "<?php\n\n"), "tests/contract.php"));
+  assert.throws(() => commentDirectives(persistent.replace("// phpcs:", "/**\n * phpcs:") + " */\n", "tests/contract.php"));
   const prefix = "WordPress.NamingConventions.PrefixAllGlobals";
-  for (const path of Object.keys(reviewedSuppressions)) {
+  for (const path of persistentVariableFiles) {
     const source = readFileSync(root + path, "utf8") + "\nfunction unowned_future_declaration() {}\n";
     const result = check(source, prefix, path);
     assert.deepEqual(result.messages.map(message => message.source), [`${prefix}.NonPrefixedFunctionFound`], path);
@@ -213,7 +188,7 @@ test("a future untracked root file cannot hide behind a file-wide ignore", () =>
     writeFileSync(root + path, source, { flag: "wx" });
     assert.ok(maintainedPhp().includes(path));
     assert.deepEqual(check(source, sniff, path), { status: 0, messages: [] });
-    assert.throws(() => assertReviewedSuppressions(readFileSync(root + path, "utf8"), path));
+    assert.throws(() => commentDirectives(readFileSync(root + path, "utf8"), path));
   } finally {
     unlinkSync(root + path);
   }

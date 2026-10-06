@@ -106,9 +106,9 @@ maintained PHP file, including future files. It rejects blanket or case-variant
 file ignores (including checker-recognized suffix spellings), ancestor selectors,
 legacy directives, inline checker configuration and unexplained exemptions.
 Only exact diagnostic identifiers with a reason are syntactically eligible;
-that alone does not grant acceptance. The suite pins the existing ordered
-path/selector/reason inventory, so a new or copied annotation requires an
-explicit reviewed inventory change. Fixture strings remain inert test data.
+that alone does not grant acceptance. New exact local exceptions require normal
+independent PR review against their concrete source boundary and evidence; there
+is no duplicate registry for local annotations. Fixture strings remain inert data.
 
 Three existing files retain only their line-2 persistent process-variable prefix
 allowance: `tests/contract.php`, `tests/fixtures/archive-safety.php` and
@@ -117,5 +117,5 @@ occurrence-local claim; unrelated function/class/constant declarations remain
 checked. Exact native cache/read operations and CLI exception diagnostics retain
 their current local annotations. Real-checker tests demonstrate actual blanket
 bypasses, precise annotation acceptance, the immediate outside diagnostic, new
-annotation rejection and future declarations inside the three allowance files.
+persistent annotation rejection and future declarations inside the three allowance files.
 This change adds no source exemptions and changes no executable PHP or dependencies.

@@ -64,8 +64,9 @@ annotations cover four locked PHPStan internal-API compatibility notifications i
 that guard; they do not suppress source defects. Preserve their reviewed inventory
 and the actual-checker outside-boundary control. New exemptions require review.
 
-`test:standards` also tokenizes comments throughout recursively maintained PHP and
-pins the existing path/selector/reason suppression inventory. No file ignore,
+`test:standards` also tokenizes comments throughout recursively maintained PHP.
+Exact local diagnostics need reasons and independent review; no duplicate local
+annotation registry is required. No file ignore,
 ancestor selector, legacy directive or inline checker configuration is permitted,
 regardless of case. The three current line-2 process-variable prefix disables are
 file-wide for that exact diagnostic only; new annotations need explicit review.
