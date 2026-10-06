@@ -68,10 +68,10 @@ test("external signature exception does not exempt an owned sibling method", () 
 
 test("test locals do not exempt unrelated global declarations", () => {
   const prefix = "WordPress.NamingConventions.PrefixAllGlobals";
-  for (const path of ["tests/contract.php", "tests/FuturePrefix.php", "src/FuturePrefix.php", "future-prefix.php"]) {
-    const result = check("<?php function unowned_probe() {} class UnownedProbe {} const UNOWNED_PROBE = 1;", prefix, path);
+  for (const path of ["tests/contract.php", "tests/FuturePrefix.php", "src/FuturePrefix.php", "src/tests/FuturePrefix.php", "src/views/FuturePrefix.php", "future-prefix.php"]) {
+    const result = check("<?php function unowned_probe() {} class UnownedProbe {} const UNOWNED_PROBE = 1; $local_value = 1;", prefix, path);
     assert.notEqual(result.status, 0);
-    assert.deepEqual(result.messages.map(message => message.source).sort(), ["Class", "Constant", "Function"].map(kind => `${prefix}.NonPrefixed${kind}Found`).sort(), path);
+    assert.deepEqual(result.messages.map(message => message.source).sort(), ["Class", "Constant", "Function", "Variable"].map(kind => `${prefix}.NonPrefixed${kind}Found`).sort(), path);
   }
-  assert.deepEqual(check("<?php $local_value = 1;", prefix, "tests/FuturePrefix.php"), { status: 0, messages: [] });
+  assert.deepEqual(check("<?php // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- Isolated test local.\n$local_value = 1;", prefix, "tests/FuturePrefix.php"), { status: 0, messages: [] });
 });

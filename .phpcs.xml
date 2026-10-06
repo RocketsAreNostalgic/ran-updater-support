@@ -25,9 +25,4 @@
 			</property>
 		</properties>
 	</rule>
-
-	<!-- Only standalone test variables lack plugin prefixes; declarations remain checked. -->
-	<rule ref="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound">
-		<exclude-pattern>/tests/</exclude-pattern>
-	</rule>
 </ruleset>

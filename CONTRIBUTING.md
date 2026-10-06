@@ -47,9 +47,13 @@ non-sensitive work; follow [SECURITY.md](SECURITY.md) for vulnerabilities and
 
 ## Global prefix boundary
 
-The tests path excepts only `PrefixAllGlobals.NonPrefixedVariableFound`: standalone
+Two existing fixture/contract files locally except only `PrefixAllGlobals.NonPrefixedVariableFound`: standalone
 contract runners and returned fixture arrays use local variables. Functions,
 classes, constants and namespaces remain subject to the configured prefix rule,
 including future test and root PHP files. The existing actual-checker regression
 proves unprefixed global declarations fail at test, source and future root paths;
 this does not declare acceptance of unrelated exception families.
+
+Variable exceptions are confined to existing source files with a reasoned
+`NonPrefixedVariableFound` annotation. No path-wide prefix exception remains;
+new test/view files and nested production `tests`/`views` paths are checked.
