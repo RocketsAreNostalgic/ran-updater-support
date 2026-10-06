@@ -93,7 +93,7 @@ function commentDirectives(source, path = "") {
   assert.equal(result.status, 0, result.stderr);
   const directives = [];
   for (const [, comment, line] of JSON.parse(result.stdout)) {
-    assert.doesNotMatch(comment, /@codingStandardsIgnore|@phpcs:/i, path);
+    assert.doesNotMatch(comment, /@codingStandards(?:Ignore|ChangeSetting)|@phpcs:/i, path);
     for (const match of comment.matchAll(/phpcs:(\S+)([^\r\n]*)/gi)) {
       const operation = match[1].toLowerCase();
       assert.ok(["ignore", "disable"].includes(operation), `${path}: forbidden directive ${operation}`);
@@ -152,7 +152,18 @@ test("blanket, case-variant, ancestor and legacy suppression bypasses fail the g
     }
     assert.deepEqual(commentDirectives(`<?php $literal = '${directive}';`), []);
   }
-  for (const directive of ["phpcs:set WordPress.PHP.YodaConditions check true", "@phpcs:ignore", "PHPCS:SET WordPress.PHP.YodaConditions check true"]) {
+  const prefix = "WordPress.NamingConventions.PrefixAllGlobals";
+  const declaration = "function rogue_function() {}";
+  assert.equal(check(`<?php\n${declaration}\n`, prefix).messages.length, 1);
+  for (const marker of ["@codingStandardsChangeSetting", "phpcs:set", "PHPCS:SET"]) {
+    const directive = `${marker} ${prefix} prefixes rogue`;
+    const source = `<?php\n// ${directive}\n${declaration}\n`;
+    assert.deepEqual(check(source, prefix), { status: 0, messages: [] }, directive);
+    assert.throws(() => commentDirectives(source, "src/Probe.php"));
+    assert.throws(() => commentDirectives(`<?php\n/** ${directive} */\n`, "src/Probe.php"));
+    assert.deepEqual(commentDirectives(`<?php $literal = '${directive}';`), []);
+  }
+  for (const directive of ["@phpcs:ignore", "@CODINGSTANDARDSCHANGESETTING WordPress.NamingConventions.PrefixAllGlobals prefixes rogue"]) {
     assert.throws(() => commentDirectives(`<?php\n// ${directive}\n`, "src/Probe.php"));
   }
 });
