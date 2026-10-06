@@ -50,6 +50,8 @@ const canonicalCodes = [
   ...["Class", "Constant", "Function", "Variable"].map(kind =>
     `WordPress.NamingConventions.PrefixAllGlobals.NonPrefixed${kind}Found`),
 ];
+const namespaceCode = "WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedNamespaceFound";
+const namespaceProbe = "<?php namespace Unowned; class Probe {}\n";
 function assertCanonicalNaming(result, path) {
   for (const code of canonicalCodes) {
     assert.ok(result.messages.some(message => message.source === code), `${path}: canonical profile lost ${code}`);
@@ -59,6 +61,7 @@ function assertCanonicalNaming(result, path) {
 test("canonical profile enforces naming without test-only sniff overrides", () => {
   for (const path of ["src/NamingProbe.php", "tests/NamingProbe.php", "tests/fixtures/NamingProbe.php", "future-root.php"]) {
     assertCanonicalNaming(check(canonicalProbe, null, path), path);
+    assert.ok(check(namespaceProbe, null, path).messages.some(message => message.source === namespaceCode), `${path}: canonical namespace diagnostic missing`);
   }
 });
 
@@ -77,6 +80,8 @@ test("actual XML narrowing and property changes fail canonical naming controls",
       const result = check(canonicalProbe, null, "tests/NamingProbe.php", path);
       assert.throws(() => assertCanonicalNaming(result, weakening), /canonical profile lost/);
     }
+    writeFileSync(root + path, ruleset.replace("</ruleset>", `<rule ref="${namespaceCode}"><severity>0</severity></rule></ruleset>`));
+    assert.equal(check(namespaceProbe, null, "src/NamespaceProbe.php", path).messages.some(message => message.source === namespaceCode), false);
   } finally {
     unlinkSync(root + path);
   }
