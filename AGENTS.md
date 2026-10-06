@@ -63,3 +63,10 @@ commands, level 8, configured stubs and suppression inventory. Three exact local
 annotations cover four locked PHPStan internal-API compatibility notifications in
 that guard; they do not suppress source defects. Preserve their reviewed inventory
 and the actual-checker outside-boundary control. New exemptions require review.
+
+`test:standards` also tokenizes comments throughout recursively maintained PHP and
+pins the existing path/selector/reason suppression inventory. No file ignore,
+ancestor selector, legacy directive or inline checker configuration is permitted,
+regardless of case. The three current line-2 process-variable prefix disables are
+file-wide for that exact diagnostic only; new annotations need explicit review.
+Do not treat a plausible reason or a green checker run as approval.
