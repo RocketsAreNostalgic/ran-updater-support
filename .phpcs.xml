@@ -18,12 +18,16 @@
 	<rule ref="RANOwnedMethods"/>
 
 	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
-		<exclude-pattern>/tests/</exclude-pattern>
 		<properties>
 			<property name="prefixes" type="array">
 				<element value="ran_updater_support"/>
 				<element value="RAN\UpdaterSupport\V1"/>
 			</property>
 		</properties>
+	</rule>
+
+	<!-- Only standalone test variables lack plugin prefixes; declarations remain checked. -->
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound">
+		<exclude-pattern>/tests/</exclude-pattern>
 	</rule>
 </ruleset>

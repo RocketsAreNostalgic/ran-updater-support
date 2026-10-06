@@ -44,3 +44,12 @@ Do not commit credentials, tokens, private repository details, archives,
 temporary files, logs, `vendor`, or dependency caches. Use ordinary issues for
 non-sensitive work; follow [SECURITY.md](SECURITY.md) for vulnerabilities and
 [SUPPORT.md](SUPPORT.md) for support.
+
+## Global prefix boundary
+
+The tests path excepts only `PrefixAllGlobals.NonPrefixedVariableFound`: standalone
+contract runners and returned fixture arrays use local variables. Functions,
+classes, constants and namespaces remain subject to the configured prefix rule,
+including future test and root PHP files. The existing actual-checker regression
+proves unprefixed global declarations fail at test, source and future root paths;
+this does not declare acceptance of unrelated exception families.
