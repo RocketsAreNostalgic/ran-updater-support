@@ -13,7 +13,8 @@ $configuration = $maintained ? 'phpstan-maintained.neon' : 'phpstan.neon';
 $config              = ( new PHPStan\DependencyInjection\NeonAdapter( array() ) )->load( $root . '/' . $configuration );
 $exemptions          = $maintained ? array( 'vendor', 'node_modules', '.git', '.workspaces' ) : array( 'tests', 'vendor', 'node_modules', '.git', '.workspaces' );
 $expected_exclusions = array_map( static fn( string $path ): string => $path . '/*', $exemptions );
-if ( 8 !== ( $config['parameters']['level'] ?? null )
+if ( 80200 !== ( $config['parameters']['phpVersion'] ?? null )
+	|| 8 !== ( $config['parameters']['level'] ?? null )
 	|| array( '.' ) !== ( $config['parameters']['paths'] ?? null )
 	|| array( 'analyseAndScan' => $expected_exclusions ) !== ( $config['parameters']['excludePaths'] ?? null )
 	|| array() !== ( $config['includes'] ?? array() )
@@ -74,13 +75,15 @@ foreach ( new RecursiveIteratorIterator( $iterator ) as $entry ) {
 			}
 		}
 	} else {
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Inspect only the local nonstandard-extension file header, never execute it.
-		$header = file_get_contents( $entry->getPathname(), false, null, 0, 512 );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Inspect local nonstandard-extension source without executing it.
+		$header = file_get_contents( $entry->getPathname() );
 		if ( false === $header ) {
 			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Standalone coverage failure is not HTML output.
 			throw new RuntimeException( 'Cannot inspect a maintained file header.' );
 		}
-		if ( preg_match( '/^(?:#![^\n]*\n)?\s*<\?(?:php\b|=)/i', $header ) ) {
+		// Only repository documentation/configuration/test-driver formats contain inert examples.
+		$inert = in_array( strtolower( $entry->getExtension() ), array( 'md', 'json', 'lock', 'neon', 'xml', 'yml', 'mjs', 'sh' ), true );
+		if ( preg_match( $inert ? '/^(?:\xEF\xBB\xBF)?(?:#![^\n]*\n)?\s*<\?(?:php\b|=)/i' : '/<\?(?:php\b|=)/i', $header ) ) {
 			throw new RuntimeException( 'Nonstandard-extension PHP needs an explicit reviewed analysis decision.' );
 		}
 	}

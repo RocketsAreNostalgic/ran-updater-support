@@ -97,3 +97,36 @@ if php "$root/tests/analysis-coverage.php" "$fixture" --maintained > "$fixture/g
 grep -q 'Review new or changed analysis exemptions' "$fixture/guard.log"
 rm "$fixture/tests/api-boundary.php"
 echo 'PASS exact locked-tool API exemption and immediately outside diagnostic.'
+
+
+# Templates are executable regardless of suffix or the length of their HTML preamble.
+for mode in production maintained; do
+    args=()
+    prefix=""
+    configuration=phpstan.neon
+    if [[ "$mode" == maintained ]]; then args=(--maintained); prefix=tests/; configuration=phpstan-maintained.neon; fi
+    for path in template.phtml template.inc template.html template.htm template template.unknown; do
+        for opening in '<?php ran_support_missing_contract();' '<?= ran_support_missing_contract();'; do
+            php -r 'echo "\xEF\xBB\xBF<section>", str_repeat("x", 4096), $argv[1];' "$opening" > "$fixture/$prefix$path"
+            if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+            grep -q 'Nonstandard-extension PHP' "$fixture/guard.log"
+            rm "$fixture/$prefix$path"
+        done
+    done
+    printf 'An inert example: <?php ran_support_missing_contract();\n' > "$fixture/$prefix"example.md
+    php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}"
+    rm "$fixture/$prefix"example.md
+    printf '<?php\necho json_validate( "{}" );\n' > "$fixture/$prefix"compatibility.php
+    if composer --no-plugins --no-interaction --working-dir="$fixture" "analyze:$mode" -- --error-format=json > "$fixture/compatibility.json" 2> "$fixture/negative.log"; then exit 1; fi
+    php -r '$r=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);foreach($r["files"][realpath($argv[2])]["messages"]??[] as $m){if(($m["identifier"]??"")==="function.notFound"&&str_contains($m["message"],"json_validate")){exit(0);}}exit(1);' "$fixture/compatibility.json" "$fixture/$prefix"compatibility.php
+    sed -i 's/phpVersion: 80200/phpVersion: 80300/' "$fixture/$configuration"
+    composer --no-plugins --no-interaction --working-dir="$fixture" "analyze:$mode" -- --error-format=json > "$fixture/compatibility-raised.json"
+    if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+    grep -q 'Review inclusive analysis scope' "$fixture/guard.log"
+    sed -i '/phpVersion:/d' "$fixture/$configuration"
+    if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+    grep -q 'Review inclusive analysis scope' "$fixture/guard.log"
+    cp "$root/$configuration" "$fixture/$configuration"
+    rm "$fixture/$prefix"compatibility.php
+done
+echo 'PASS executable templates, inert examples and actual PHP 8.2 compatibility boundaries in both profiles.'

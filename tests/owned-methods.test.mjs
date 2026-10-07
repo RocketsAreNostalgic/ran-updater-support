@@ -101,6 +101,7 @@ function assertRulesetCoverage(ruleset) {
       'exclusions' => $values($xml->xpath('//exclude-pattern')),
       'rules' => $values($xml->xpath('//rule/@ref')),
       'arguments' => $attributes($xml->xpath('//arg')),
+      'configuration' => $attributes($xml->xpath('//config')),
     ], JSON_THROW_ON_ERROR);
   `], { cwd: root, input: ruleset, encoding: "utf8", timeout: 60000 });
   assert.ifError(result.error);
@@ -110,6 +111,7 @@ function assertRulesetCoverage(ruleset) {
     files: ["."],
     exclusions: ["/vendor/", "/node_modules/"],
     rules: ["RANWordPressLibrary", "RANOwnedMethods", "WordPress.NamingConventions.PrefixAllGlobals"],
+    configuration: [{ "@attributes": { name: "testVersion", value: "8.2-" } }],
     arguments: [
       { "@attributes": { name: "basepath", value: "." } },
       { "@attributes": { name: "colors" } },
@@ -332,4 +334,23 @@ test("a future untracked root file cannot hide behind a file-wide ignore", () =>
   } finally {
     unlinkSync(root + path);
   }
+});
+
+
+test("PHP 8.2 compatibility target retains the actual newer-function diagnostic", () => {
+  const ruleset = readFileSync(root + ".phpcs.xml", "utf8");
+  const code = "PHPCompatibility.FunctionUse.NewFunctions.json_validateFound";
+  const source = "<?php json_validate( '{}' );";
+  const present = result => result.messages.some(message => message.source === code);
+  assert.ok(present(check(source, null)), "PHP 8.2 diagnostic missing");
+  const path = `standards-compatibility-${process.pid}-${Date.now()}.xml`;
+  try {
+    const raised = ruleset.replace('value="8.2-"', 'value="8.3-"');
+    writeFileSync(root + path, raised);
+    assert.equal(present(check(source, null, "src/CompatibilityProbe.php", path)), false);
+    for (const mutant of [raised,
+      ruleset.replace('<config name="testVersion" value="8.2-"/>', ''),
+      ruleset.replace('</ruleset>', '<config name="testVersion" value="8.3-"/></ruleset>'),
+    ]) assert.throws(() => assertRulesetCoverage(mutant), /unreviewed ruleset coverage change/);
+  } finally { unlinkSync(root + path); }
 });
