@@ -18,7 +18,6 @@
 	<rule ref="RANOwnedMethods"/>
 
 	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
-		<exclude-pattern>/tests/</exclude-pattern>
 		<properties>
 			<property name="prefixes" type="array">
 				<element value="ran_updater_support"/>

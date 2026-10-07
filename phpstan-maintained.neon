@@ -1,12 +1,12 @@
+# Analyze every maintained PHP file without exposing development symbols to the
+# separate production profile. New roots and split files are included by default.
 parameters:
 	level: 8
 	treatPhpDocTypesAsCertain: false
 	paths:
 		- .
-	# Repository-root development/dependency roles; nested product paths remain included.
 	excludePaths:
 		analyseAndScan:
-			- tests/*
 			- vendor/*
 			- node_modules/*
 			- .git/*
