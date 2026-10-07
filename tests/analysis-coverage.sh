@@ -142,3 +142,32 @@ for mode in production maintained; do
     rm "$fixture/$prefix"compatibility.php
 done
 echo 'PASS executable templates, inert examples and actual PHP 8.2 compatibility boundaries in both profiles.'
+
+
+# Discovery must not inherit the current PHP process's short_open_tag setting.
+printf '<? echo "short-tag-executed"; ?>' > "$fixture/short-execution.tpl"
+test "$(php -d short_open_tag=1 "$fixture/short-execution.tpl")" = short-tag-executed
+rm "$fixture/short-execution.tpl"
+for mode in production maintained; do
+    args=()
+    prefix=""
+    if [[ "$mode" == maintained ]]; then args=(--maintained); prefix=tests/; fi
+    for suffix in tpl inc phtml custom; do
+        printf '<main><? echo "executed"; ?>' > "$fixture/$prefix"short.$suffix
+        for enabled in 0 1; do
+            if php -d short_open_tag="$enabled" "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+            grep -q 'Nonstandard-extension PHP' "$fixture/guard.log"
+        done
+        rm "$fixture/$prefix"short.$suffix
+    done
+    printf '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><root/>' > "$fixture/$prefix"example.xml
+    php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}"
+    printf '<? echo "executed"; ?>' >> "$fixture/$prefix"example.xml
+    if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+    grep -q 'Nonstandard-extension PHP' "$fixture/guard.log"
+    printf '<?xmlfake payload?><root/>' > "$fixture/$prefix"example.xml
+    if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+    grep -q 'Nonstandard-extension PHP' "$fixture/guard.log"
+    rm "$fixture/$prefix"example.xml
+done
+echo 'PASS executable bare short tags under both INI settings and genuine XML boundaries.'
