@@ -7,9 +7,9 @@ import test from "node:test";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const sniff = "RANOwnedMethods.NamingConventions.ValidMethodName";
 
-function check(source, selectedSniff = sniff, path = "src/NamingProbe.php") {
+function check(source, selectedSniff = sniff, path = "src/NamingProbe.php", standard = ".phpcs.xml") {
   const result = spawnSync("php", [
-    "vendor/bin/phpcs", "--standard=.phpcs.xml", `--sniffs=${selectedSniff}`,
+    "vendor/bin/phpcs", `--standard=${standard}`, ...(selectedSniff === null ? [] : [`--sniffs=${selectedSniff}`]),
     "-q", "--no-colors", "--report=json", `--stdin-path=${root}${path}`, "-",
   ], { cwd: root, input: source, encoding: "utf8", timeout: 60000 });
   assert.ifError(result.error);
@@ -35,6 +35,135 @@ class ExternalTest extends \\PHPUnit\\Framework\\TestCase {
 
 test("repository rules accept snake_case, magic methods and a narrow external signature", () => {
   assert.deepEqual(check(compliant), { status: 0, messages: [] });
+});
+
+// These probes must use the canonical profile without a CLI sniff override:
+// an override can undo a narrowing argument in XML and conceal a broken gate.
+const canonicalProbe = `<?php
+function unowned_probe() {}
+class UnownedProbe { public function badName() {} }
+const UNOWNED_PROBE = 1;
+$local_value = 1;
+`;
+const canonicalCodes = [
+  `${sniff}.NotSnakeCase`,
+  ...["Class", "Constant", "Function", "Variable"].map(kind =>
+    `WordPress.NamingConventions.PrefixAllGlobals.NonPrefixed${kind}Found`),
+];
+const namespaceCode = "WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedNamespaceFound";
+const namespaceProbe = "<?php namespace Unowned; class Probe {}\n";
+function assertCanonicalNaming(result, path) {
+  for (const code of canonicalCodes) {
+    assert.ok(result.messages.some(message => message.source === code), `${path}: canonical profile lost ${code}`);
+  }
+}
+
+test("canonical profile enforces naming without test-only sniff overrides", () => {
+  for (const path of ["src/NamingProbe.php", "tests/NamingProbe.php", "tests/fixtures/NamingProbe.php", "future-root.php"]) {
+    assertCanonicalNaming(check(canonicalProbe, null, path), path);
+    assert.ok(check(namespaceProbe, null, path).messages.some(message => message.source === namespaceCode), `${path}: canonical namespace diagnostic missing`);
+  }
+});
+
+test("actual XML narrowing and property changes fail canonical naming controls", () => {
+  const ruleset = readFileSync(root + ".phpcs.xml", "utf8");
+  const path = `standards-probe-${process.pid}-${Date.now()}.xml`;
+  const weakenings = [
+    '<arg name="sniffs" value="WordPress.PHP.YodaConditions"/>',
+    `<arg name="exclude" value="${sniff}"/>`,
+    ...[0, 1, 4].map(severity => `<rule ref="${sniff}"><severity>${severity}</severity></rule>`),
+    '<rule ref="WordPress.NamingConventions.PrefixAllGlobals"><properties><property name="prefixes" type="array"><element value="unowned"/></property></properties></rule>',
+  ];
+  try {
+    for (const weakening of weakenings) {
+      writeFileSync(root + path, ruleset.replace("</ruleset>", weakening + "</ruleset>"));
+      const result = check(canonicalProbe, null, "tests/NamingProbe.php", path);
+      assert.throws(() => assertCanonicalNaming(result, weakening), /canonical profile lost/);
+    }
+    writeFileSync(root + path, ruleset.replace("</ruleset>", `<rule ref="${namespaceCode}"><severity>0</severity></rule></ruleset>`));
+    assert.equal(check(namespaceProbe, null, "src/NamespaceProbe.php", path).messages.some(message => message.source === namespaceCode), false);
+  } finally {
+    unlinkSync(root + path);
+  }
+});
+
+// Naming probes cannot establish that every inherited library diagnostic remains
+// active at every future path. Protect the local selector boundary structurally.
+function assertRulesetCoverage(ruleset) {
+  const result = spawnSync("php", ["-r", `
+    $xml = simplexml_load_string(stream_get_contents(STDIN));
+    if ($xml === false) { exit(1); }
+    $values = static fn($nodes) => array_map(static fn($node) => (string) $node, $nodes);
+    $attributes = static fn($nodes) => array_map(static fn($node) => (array) $node->attributes(), $nodes);
+    echo json_encode([
+      'forbidden' => count($xml->xpath('//@phpcs-only | //@phpcbf-only | //include-pattern | //rule//exclude-pattern | //exclude | //severity | //type | //file/@* | //exclude-pattern/@* | //rule/@*[name() != "ref"]')),
+      'files' => $values($xml->xpath('//file')),
+      'exclusions' => $values($xml->xpath('//exclude-pattern')),
+      'rules' => $values($xml->xpath('//rule/@ref')),
+      'arguments' => $attributes($xml->xpath('//arg')),
+    ], JSON_THROW_ON_ERROR);
+  `], { cwd: root, input: ruleset, encoding: "utf8", timeout: 60000 });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    forbidden: 0,
+    files: ["."],
+    exclusions: ["/vendor/", "/node_modules/"],
+    rules: ["RANWordPressLibrary", "RANOwnedMethods", "WordPress.NamingConventions.PrefixAllGlobals"],
+    arguments: [
+      { "@attributes": { name: "basepath", value: "." } },
+      { "@attributes": { name: "colors" } },
+      { "@attributes": { name: "extensions", value: "php" } },
+      { "@attributes": { name: "parallel", value: "4" } },
+      { "@attributes": { value: "sp" } },
+    ],
+  }, "unreviewed ruleset coverage change");
+}
+
+test("repository XML preserves unconditional coverage and reviewed path boundaries", () => {
+  assertRulesetCoverage(readFileSync(root + ".phpcs.xml", "utf8"));
+});
+
+test("conditional and targeted path weakening hides a library diagnostic but fails the guard", () => {
+  const ruleset = readFileSync(root + ".phpcs.xml", "utf8");
+  const code = "WordPress.WP.AlternativeFunctions.json_encode_json_encode";
+  const source = "<?php json_encode( array() );";
+  const target = "src/unreviewed-future.php";
+  const diagnosticPresent = result => result.messages.some(message => message.source === code);
+  assert.ok(diagnosticPresent(check(source, null, target)), "baseline library diagnostic missing");
+  const mutants = [
+    ...['phpcbf-only="true"', 'phpcs-only="false"'].map(attribute =>
+      ruleset.replace('<rule ref="RANWordPressLibrary"/>', `<rule ref="RANWordPressLibrary" ${attribute}/>`)),
+    ruleset.replace("</ruleset>", `<rule ref="${code}"><include-pattern>^(?!*unreviewed-future[.]php)</include-pattern></rule></ruleset>`),
+    ruleset.replace("</ruleset>", `<rule ref="${code}"><exclude-pattern>*/unreviewed-future.php</exclude-pattern></rule></ruleset>`),
+    ruleset.replace("</ruleset>", '<exclude-pattern>*/unreviewed-future.php</exclude-pattern></ruleset>'),
+  ];
+  const path = `standards-coverage-${process.pid}-${Date.now()}.xml`;
+  try {
+    for (const mutant of mutants) {
+      writeFileSync(root + path, mutant);
+      assert.equal(diagnosticPresent(check(source, null, target, path)), false, "mutation did not hide the target diagnostic");
+      if (mutant.includes("unreviewed-future")) {
+        assert.ok(diagnosticPresent(check(source, null, "src/adjacent-future.php", path)), "targeted mutation unexpectedly hid the adjacent diagnostic");
+      }
+      assert.throws(() => assertRulesetCoverage(mutant), /unreviewed ruleset coverage change/);
+    }
+    // Conditional filtering also applies to properties and their array elements.
+    // Every spelling is forbidden, including forms active only under PHPCBF.
+    for (const attribute of ['phpcs-only="true"', 'phpcs-only="false"', 'phpcbf-only="true"', 'phpcbf-only="false"']) {
+      for (const node of ['<rule ', '<property ', '<element ']) {
+        assert.throws(() => assertRulesetCoverage(ruleset.replace(node, `${node}${attribute} `)), /unreviewed ruleset coverage change/);
+      }
+    }
+    for (const mutant of [
+      ruleset.replace('<file>.</file>', '<file>src</file>'),
+      ruleset.replace('</ruleset>', '<arg name="ignore" value="*/unreviewed-future.php"/></ruleset>'),
+    ]) {
+      assert.throws(() => assertRulesetCoverage(mutant), /unreviewed ruleset coverage change/);
+    }
+  } finally {
+    unlinkSync(root + path);
+  }
 });
 
 test("repository rules reject owned camelCase in plain, derived and implementing classes", () => {

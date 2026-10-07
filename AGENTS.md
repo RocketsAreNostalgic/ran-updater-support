@@ -71,3 +71,15 @@ ancestor selector, legacy directive or inline checker configuration is permitted
 regardless of case. The three current line-2 process-variable prefix disables are
 file-wide for that exact diagnostic only; new annotations need explicit review.
 Do not treat a plausible reason or a green checker run as approval.
+
+Canonical naming controls must also run without a command-line sniff selector.
+Such a selector can override narrowing XML arguments and make a disabled gate
+appear covered. Preserve actual root/source/test diagnostics and the real XML
+argument, severity and prefix-property weakening controls.
+
+The same standards suite protects the reviewed XML file population, dependency
+exclusions, rule ancestry and canonical arguments. Conditional PHPCS/PHPCBF
+attributes and rule-local path selectors are forbidden: a passing naming probe
+does not establish coverage of unrelated inherited library diagnostics. Retain
+the actual JSON-encoding diagnostic controls for conditional and targeted path
+weakening; changes to these boundaries require explicit review.
