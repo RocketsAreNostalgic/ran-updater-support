@@ -97,3 +97,25 @@ existing effective-discovery and actual-analyzer contracts. Two failed-read path
 in the guard now stop explicitly rather than passing false to parser functions.
 Production PHP, public APIs, dependencies and runtime behavior are unchanged.
 This bounded analysis change does not certify the separate PHPCS suppression policy.
+
+
+## Suppression regression policy (#65 / #128)
+
+The existing `test:standards` suite tokenizes comments in every recursively
+maintained PHP file, including future files. It rejects blanket or case-variant
+file ignores (including checker-recognized suffix spellings), ancestor selectors,
+legacy directives, inline checker configuration and unexplained exemptions.
+Only exact diagnostic identifiers with a reason are syntactically eligible;
+that alone does not grant acceptance. New exact local exceptions require normal
+independent PR review against their concrete source boundary and evidence; there
+is no duplicate registry for local annotations. Fixture strings remain inert data.
+
+Three existing files retain only their line-2 persistent process-variable prefix
+allowance: `tests/contract.php`, `tests/fixtures/archive-safety.php` and
+`tests/analysis-coverage.php`. This is a file-wide variable allowance, not an
+occurrence-local claim; unrelated function/class/constant declarations remain
+checked. Exact native cache/read operations and CLI exception diagnostics retain
+their current local annotations. Real-checker tests demonstrate actual blanket
+bypasses, precise annotation acceptance, the immediate outside diagnostic, new
+persistent annotation rejection and future declarations inside the three allowance files.
+This change adds no source exemptions and changes no executable PHP or dependencies.
