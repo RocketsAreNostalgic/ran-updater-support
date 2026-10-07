@@ -2,12 +2,13 @@
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 php "$root/tests/analysis-coverage.php"
+php "$root/tests/analysis-coverage.php" "$root" --maintained
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
-cp "$root/composer.json" "$root/composer.lock" "$root/phpstan.neon" "$fixture/"
+cp "$root/composer.json" "$root/composer.lock" "$root/phpstan.neon" "$root/phpstan-maintained.neon" "$fixture/"
 cp -R "$root/src" "$fixture/src"
 ln -s "$root/vendor" "$fixture/vendor"
-analyze() { composer --no-plugins --no-interaction --working-dir="$fixture" analyze -- --error-format=json; }
+analyze() { composer --no-plugins --no-interaction --working-dir="$fixture" analyze:production -- --error-format=json; }
 analyze > "$fixture/clean.json"
 mkdir -p "$fixture/new-product/contracts" "$fixture/src/tests" "$fixture/tests"
 for path in root-contract.php new-product/contracts/split.php src/tests/runtime-contract.php; do
@@ -55,3 +56,44 @@ sed -i 's/- \.$/- src/' "$fixture/phpstan.neon"
 if php "$root/tests/analysis-coverage.php" "$fixture" > "$fixture/guard.log" 2>&1; then exit 1; fi
 grep -q 'Review inclusive analysis scope' "$fixture/guard.log"
 echo 'PASS inclusive analysis: root, nested, split/moved, role collision, exclusions and unsupported extensions.'
+
+# The separate maintained profile includes every test and future script at level 8.
+cp "$root/phpstan.neon" "$fixture/phpstan.neon"
+mkdir -p "$fixture/scripts" "$fixture/tests/new-fixtures"
+maintained() { composer --no-plugins --no-interaction --working-dir="$fixture" analyze:maintained -- --error-format=json; }
+maintained > "$fixture/maintained-clean.json"
+for path in tests/new-fixtures/contract.php scripts/maintenance.php; do
+    printf '<?php\nran_support_missing_contract();\n' > "$fixture/$path"
+    php "$root/tests/analysis-coverage.php" "$fixture" --maintained
+    if maintained > "$fixture/maintained-negative.json" 2> "$fixture/negative.log"; then exit 1; fi
+    php -r '$r=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);foreach($r["files"][realpath($argv[2])]["messages"]??[] as $m){if(($m["identifier"]??"")==="function.notFound"&&str_contains($m["message"],"ran_support_missing_contract")){exit(0);}}exit(1);' "$fixture/maintained-negative.json" "$fixture/$path"
+    rm "$fixture/$path"
+done
+for configuration in phpstan.neon phpstan-maintained.neon; do
+    sed -i 's/level: 8/level: 4/' "$fixture/$configuration"
+    args=()
+    if [[ "$configuration" == phpstan-maintained.neon ]]; then args=(--maintained); fi
+    if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+    grep -q 'Review inclusive analysis scope' "$fixture/guard.log"
+    cp "$root/$configuration" "$fixture/$configuration"
+done
+printf '\t\t\t- tests/*\n' >> "$fixture/phpstan-maintained.neon"
+if php "$root/tests/analysis-coverage.php" "$fixture" --maintained > "$fixture/guard.log" 2>&1; then exit 1; fi
+grep -q 'Review inclusive analysis scope' "$fixture/guard.log"
+cp "$root/phpstan-maintained.neon" "$fixture/phpstan-maintained.neon"
+printf '\tstubFiles:\n\t\t- tests/development.php\n' >> "$fixture/phpstan-maintained.neon"
+if php "$root/tests/analysis-coverage.php" "$fixture" --maintained > "$fixture/guard.log" 2>&1; then exit 1; fi
+grep -q 'Effective PHPStan selection differs' "$fixture/guard.log"
+echo 'PASS maintained level 8: future tests/scripts, minimum level, exclusions and stub removal.'
+
+cp "$root/phpstan-maintained.neon" "$fixture/phpstan-maintained.neon"
+# A neighboring internal API call still reports its compatibility notification.
+printf '<?php\nnew PHPStan\\DependencyInjection\\NeonAdapter([]);\n' > "$fixture/tests/api-boundary.php"
+if maintained > "$fixture/api-negative.json" 2> "$fixture/negative.log"; then exit 1; fi
+grep -q 'phpstanApi.constructor' "$fixture/api-negative.json"
+# A new annotated occurrence requires an explicit reviewed inventory decision.
+printf '<?php\n// @phpstan-ignore phpstanApi.constructor (Unreviewed copy.)\nnew PHPStan\\DependencyInjection\\NeonAdapter([]);\n' > "$fixture/tests/api-boundary.php"
+if php "$root/tests/analysis-coverage.php" "$fixture" --maintained > "$fixture/guard.log" 2>&1; then exit 1; fi
+grep -q 'Review new or changed analysis exemptions' "$fixture/guard.log"
+rm "$fixture/tests/api-boundary.php"
+echo 'PASS exact locked-tool API exemption and immediately outside diagnostic.'

@@ -6,19 +6,31 @@ declare(strict_types=1);
 $root = dirname( __DIR__ );
 require $root . '/vendor/autoload.php';
 // The candidate fixture can provide its own root while retaining the real locked tool.
-$root                = $argv[1] ?? $root;
-$config              = ( new PHPStan\DependencyInjection\NeonAdapter( array() ) )->load( $root . '/phpstan.neon' );
-$exemptions          = array( 'tests', 'vendor', 'node_modules', '.git', '.workspaces' );
+$root          = $argv[1] ?? $root;
+$maintained    = in_array( '--maintained', $argv ?? array(), true );
+$configuration = $maintained ? 'phpstan-maintained.neon' : 'phpstan.neon';
+// @phpstan-ignore phpstanApi.constructor, phpstanApi.method (Locked NeonAdapter reads the exact configuration consumed by this coverage contract.)
+$config              = ( new PHPStan\DependencyInjection\NeonAdapter( array() ) )->load( $root . '/' . $configuration );
+$exemptions          = $maintained ? array( 'vendor', 'node_modules', '.git', '.workspaces' ) : array( 'tests', 'vendor', 'node_modules', '.git', '.workspaces' );
 $expected_exclusions = array_map( static fn( string $path ): string => $path . '/*', $exemptions );
-if ( array( '.' ) !== ( $config['parameters']['paths'] ?? null )
+if ( 8 !== ( $config['parameters']['level'] ?? null )
+	|| array( '.' ) !== ( $config['parameters']['paths'] ?? null )
 	|| array( 'analyseAndScan' => $expected_exclusions ) !== ( $config['parameters']['excludePaths'] ?? null )
 	|| array() !== ( $config['includes'] ?? array() )
-	|| isset( $config['parameters']['fileExtensions'] ) ) {
+	|| isset( $config['parameters']['fileExtensions'] )
+	|| isset( $config['parameters']['ignoreErrors'] ) ) {
 	throw new RuntimeException( 'Review inclusive analysis scope and its explicit role exemptions.' );
 }
 // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Read the local canonical command, never runtime or remote state.
-$composer = json_decode( file_get_contents( $root . '/composer.json' ), true, 512, JSON_THROW_ON_ERROR );
-if ( 'phpstan analyse --configuration=phpstan.neon --no-progress --memory-limit=512M' !== $composer['scripts']['analyze'] ) {
+$composer_source = file_get_contents( $root . '/composer.json' );
+if ( false === $composer_source ) {
+	// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Standalone coverage failure is not HTML output.
+	throw new RuntimeException( 'Cannot read the canonical Composer commands.' );
+}
+$composer = json_decode( $composer_source, true, 512, JSON_THROW_ON_ERROR );
+if ( array( '@analyze:production', '@analyze:maintained' ) !== $composer['scripts']['analyze']
+	|| 'phpstan analyse --configuration=phpstan.neon --no-progress --memory-limit=512M' !== $composer['scripts']['analyze:production']
+	|| 'phpstan analyse --configuration=phpstan-maintained.neon --no-progress --memory-limit=512M' !== $composer['scripts']['analyze:maintained'] ) {
 	throw new RuntimeException( 'Review analysis command overrides.' );
 }
 $iterator = new RecursiveCallbackFilterIterator(
@@ -28,6 +40,13 @@ $iterator = new RecursiveCallbackFilterIterator(
 	}
 );
 $expected = array();
+// Only these reviewed locked-tool API notifications are retained; no broad ignores.
+$analysis_exceptions = array(
+	'// @phpstan-ignore phpstanApi.constructor, phpstanApi.method (Locked NeonAdapter reads the exact configuration consumed by this coverage contract.)',
+	'// @phpstan-ignore phpstanApi.constructor (Locked FileExcluder mirrors the actual CLI post-finder stub removal.)',
+	'// @phpstan-ignore phpstanApi.method (Use the locked CLI exclusion predicate rather than an approximation.)',
+);
+$found_exceptions    = array();
 foreach ( new RecursiveIteratorIterator( $iterator ) as $entry ) {
 	if ( ! $entry->isFile() ) {
 		continue;
@@ -37,26 +56,53 @@ foreach ( new RecursiveIteratorIterator( $iterator ) as $entry ) {
 			throw new RuntimeException( 'Unsupported PHP extension must not evade analysis.' );
 		}
 		$expected[] = $entry->getPathname();
+		if ( $maintained ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Inspect maintained comments without executing the source.
+			$source = file_get_contents( $entry->getPathname() );
+			if ( false === $source ) {
+				// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Standalone coverage failure is not HTML output.
+				throw new RuntimeException( 'Cannot inspect maintained analysis annotations.' );
+			}
+			foreach ( token_get_all( $source ) as $token ) {
+				if ( is_array( $token ) && in_array( $token[0], array( T_COMMENT, T_DOC_COMMENT ), true ) && preg_match( '/@phpstan-ignore/i', $token[1] ) ) {
+					if ( $root . '/tests/analysis-coverage.php' !== $entry->getPathname() || ! in_array( $token[1], $analysis_exceptions, true ) ) {
+						// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Standalone coverage failure is not HTML output.
+						throw new RuntimeException( 'Review new or changed analysis exemptions.' );
+					}
+					$found_exceptions[] = $token[1];
+				}
+			}
+		}
 	} else {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Inspect only the local nonstandard-extension file header, never execute it.
 		$header = file_get_contents( $entry->getPathname(), false, null, 0, 512 );
+		if ( false === $header ) {
+			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Standalone coverage failure is not HTML output.
+			throw new RuntimeException( 'Cannot inspect a maintained file header.' );
+		}
 		if ( preg_match( '/^(?:#![^\n]*\n)?\s*<\?(?:php\b|=)/i', $header ) ) {
 			throw new RuntimeException( 'Nonstandard-extension PHP needs an explicit reviewed analysis decision.' );
 		}
 	}
 }
+if ( $maintained && is_file( $root . '/tests/analysis-coverage.php' ) && $analysis_exceptions !== $found_exceptions ) {
+	// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Standalone coverage failure is not HTML output.
+	throw new RuntimeException( 'Review the exact locked-tool analysis exemption inventory.' );
+}
 if ( array() === $expected ) {
-	throw new RuntimeException( 'No production PHP discovered.' );
+	throw new RuntimeException( 'No PHP discovered for this analysis profile.' );
 }
 $temp = sys_get_temp_dir() . '/ran-support-analysis-' . bin2hex( random_bytes( 12 ) );
 try {
-	$container = ( new PHPStan\DependencyInjection\ContainerFactory( $root ) )->create( $temp, array( $root . '/phpstan.neon' ), array() );
+	$container = ( new PHPStan\DependencyInjection\ContainerFactory( $root ) )->create( $temp, array( $root . '/' . $configuration ), array() );
 	$actual    = $container->getService( 'fileFinderAnalyse' )->findFiles( $container->getParameter( 'paths' ) )->getFiles();
 	// Match the locked CLI's post-discovery removal of stub files.
+	// @phpstan-ignore phpstanApi.constructor (Locked FileExcluder mirrors the actual CLI post-finder stub removal.)
 	$stub_excluder = new PHPStan\File\FileExcluder( $container->getByType( PHPStan\File\FileHelper::class ), $container->getParameter( 'stubFiles' ) );
-	$actual        = array_filter( $actual, static fn( string $file ): bool => ! $stub_excluder->isExcludedFromAnalysing( $file ) );
+	// @phpstan-ignore phpstanApi.method (Use the locked CLI exclusion predicate rather than an approximation.)
+	$actual = array_filter( $actual, static fn( string $file ): bool => ! $stub_excluder->isExcludedFromAnalysing( $file ) );
 	if ( array() !== array_diff( $expected, $actual ) || array() !== array_diff( $actual, $expected ) ) {
-		throw new RuntimeException( 'Effective PHPStan selection differs from independently discovered production PHP.' );
+		throw new RuntimeException( 'Effective PHPStan selection differs from independently discovered PHP.' );
 	}
 } finally {
 	if ( is_dir( $temp ) ) {
@@ -68,4 +114,4 @@ try {
 		rmdir( $temp );
 	}
 }
-printf( "Effective production analysis covers %d independently discovered PHP files.\n", count( $expected ) );
+printf( "Effective %s analysis covers %d independently discovered PHP files.\n", $maintained ? 'maintained' : 'production', count( $expected ) );
