@@ -97,3 +97,77 @@ if php "$root/tests/analysis-coverage.php" "$fixture" --maintained > "$fixture/g
 grep -q 'Review new or changed analysis exemptions' "$fixture/guard.log"
 rm "$fixture/tests/api-boundary.php"
 echo 'PASS exact locked-tool API exemption and immediately outside diagnostic.'
+
+
+# Templates are executable regardless of suffix or the length of their HTML preamble.
+for mode in production maintained; do
+    args=()
+    prefix=""
+    configuration=phpstan.neon
+    if [[ "$mode" == maintained ]]; then args=(--maintained); prefix=tests/; configuration=phpstan-maintained.neon; fi
+    for path in template.phtml template.inc template.html template.htm template template.unknown template.json template.lock template.neon template.xml template.yml; do
+        for opening in '<?php ran_support_missing_contract();' '<?= ran_support_missing_contract();'; do
+            php -r 'echo "\xEF\xBB\xBF<section>", str_repeat("x", 4096), $argv[1];' "$opening" > "$fixture/$prefix$path"
+            if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+            grep -q 'Nonstandard-extension PHP' "$fixture/guard.log"
+            rm "$fixture/$prefix$path"
+        done
+    done
+    printf 'An inert example: <?php ran_support_missing_contract();\n' > "$fixture/$prefix"example.md
+    php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}"
+    rm "$fixture/$prefix"example.md
+    # Only an actual Bash driver may quote a PHP fixture under the shell suffix.
+    for shebang in '#!/usr/bin/env bash' '#!/bin/bash'; do
+        printf '%s\nprintf '\''<main><?php fixture(); ?></main>'\''\n' "$shebang" > "$fixture/$prefix"example.sh
+        php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}"
+        sed -i '1d' "$fixture/$prefix"example.sh
+        if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+        grep -q 'Nonstandard-extension PHP' "$fixture/guard.log"
+        printf '%s\n<?php ran_support_missing_contract();\n' "$shebang" > "$fixture/$prefix"example.sh
+        if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+        grep -q 'Nonstandard-extension PHP' "$fixture/guard.log"
+        rm "$fixture/$prefix"example.sh
+    done
+    printf '<?php\necho json_validate( "{}" );\n' > "$fixture/$prefix"compatibility.php
+    if composer --no-plugins --no-interaction --working-dir="$fixture" "analyze:$mode" -- --error-format=json > "$fixture/compatibility.json" 2> "$fixture/negative.log"; then exit 1; fi
+    php -r '$r=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);foreach($r["files"][realpath($argv[2])]["messages"]??[] as $m){if(($m["identifier"]??"")==="function.notFound"&&str_contains($m["message"],"json_validate")){exit(0);}}exit(1);' "$fixture/compatibility.json" "$fixture/$prefix"compatibility.php
+    sed -i 's/phpVersion: 80200/phpVersion: 80300/' "$fixture/$configuration"
+    composer --no-plugins --no-interaction --working-dir="$fixture" "analyze:$mode" -- --error-format=json > "$fixture/compatibility-raised.json"
+    if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+    grep -q 'Review inclusive analysis scope' "$fixture/guard.log"
+    sed -i '/phpVersion:/d' "$fixture/$configuration"
+    if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+    grep -q 'Review inclusive analysis scope' "$fixture/guard.log"
+    cp "$root/$configuration" "$fixture/$configuration"
+    rm "$fixture/$prefix"compatibility.php
+done
+echo 'PASS executable templates, inert examples and actual PHP 8.2 compatibility boundaries in both profiles.'
+
+
+# Discovery must not inherit the current PHP process's short_open_tag setting.
+printf '<? echo "short-tag-executed"; ?>' > "$fixture/short-execution.tpl"
+test "$(php -d short_open_tag=1 "$fixture/short-execution.tpl")" = short-tag-executed
+rm "$fixture/short-execution.tpl"
+for mode in production maintained; do
+    args=()
+    prefix=""
+    if [[ "$mode" == maintained ]]; then args=(--maintained); prefix=tests/; fi
+    for suffix in tpl inc phtml custom; do
+        printf '<main><? echo "executed"; ?>' > "$fixture/$prefix"short.$suffix
+        for enabled in 0 1; do
+            if php -d short_open_tag="$enabled" "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+            grep -q 'Nonstandard-extension PHP' "$fixture/guard.log"
+        done
+        rm "$fixture/$prefix"short.$suffix
+    done
+    printf '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><root/>' > "$fixture/$prefix"example.xml
+    php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}"
+    printf '<? echo "executed"; ?>' >> "$fixture/$prefix"example.xml
+    if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+    grep -q 'Nonstandard-extension PHP' "$fixture/guard.log"
+    printf '<?xmlfake payload?><root/>' > "$fixture/$prefix"example.xml
+    if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+    grep -q 'Nonstandard-extension PHP' "$fixture/guard.log"
+    rm "$fixture/$prefix"example.xml
+done
+echo 'PASS executable bare short tags under both INI settings and genuine XML boundaries.'

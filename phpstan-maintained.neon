@@ -2,6 +2,7 @@
 # separate production profile. New roots and split files are included by default.
 parameters:
 	level: 8
+	phpVersion: 80200
 	treatPhpDocTypesAsCertain: false
 	paths:
 		- .

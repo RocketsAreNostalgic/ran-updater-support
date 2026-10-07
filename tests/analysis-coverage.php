@@ -13,7 +13,8 @@ $configuration = $maintained ? 'phpstan-maintained.neon' : 'phpstan.neon';
 $config              = ( new PHPStan\DependencyInjection\NeonAdapter( array() ) )->load( $root . '/' . $configuration );
 $exemptions          = $maintained ? array( 'vendor', 'node_modules', '.git', '.workspaces' ) : array( 'tests', 'vendor', 'node_modules', '.git', '.workspaces' );
 $expected_exclusions = array_map( static fn( string $path ): string => $path . '/*', $exemptions );
-if ( 8 !== ( $config['parameters']['level'] ?? null )
+if ( 80200 !== ( $config['parameters']['phpVersion'] ?? null )
+	|| 8 !== ( $config['parameters']['level'] ?? null )
 	|| array( '.' ) !== ( $config['parameters']['paths'] ?? null )
 	|| array( 'analyseAndScan' => $expected_exclusions ) !== ( $config['parameters']['excludePaths'] ?? null )
 	|| array() !== ( $config['includes'] ?? array() )
@@ -74,13 +75,22 @@ foreach ( new RecursiveIteratorIterator( $iterator ) as $entry ) {
 			}
 		}
 	} else {
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Inspect only the local nonstandard-extension file header, never execute it.
-		$header = file_get_contents( $entry->getPathname(), false, null, 0, 512 );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Inspect local nonstandard-extension source without executing it.
+		$header = file_get_contents( $entry->getPathname() );
 		if ( false === $header ) {
 			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Standalone coverage failure is not HTML output.
 			throw new RuntimeException( 'Cannot inspect a maintained file header.' );
 		}
-		if ( preg_match( '/^(?:#![^\n]*\n)?\s*<\?(?:php\b|=)/i', $header ) ) {
+		// Markdown guidance and Node/Bash test drivers may quote inert PHP examples.
+		$inert = in_array( strtolower( $entry->getExtension() ), array( 'md', 'mjs' ), true )
+			|| ( 'sh' === strtolower( $entry->getExtension() ) && ( str_starts_with( $header, "#!/usr/bin/env bash\n" ) || str_starts_with( $header, "#!/bin/bash\n" ) ) );
+		// Only a genuine leading XML declaration is data rather than a possible short PHP tag.
+		$header = preg_replace(
+			'~\A(?:\xEF\xBB\xBF)?<\?xml[ \t\r\n]+version[ \t\r\n]*=[ \t\r\n]*(?:"1\.[01]"|\'1\.[01]\')(?:[ \t\r\n]+encoding[ \t\r\n]*=[ \t\r\n]*(?:"[A-Za-z][A-Za-z0-9._-]*"|\'[A-Za-z][A-Za-z0-9._-]*\'))?(?:[ \t\r\n]+standalone[ \t\r\n]*=[ \t\r\n]*(?:"(?:yes|no)"|\'(?:yes|no)\'))?[ \t\r\n]*\?>~',
+			'',
+			$header
+		);
+		if ( null === $header || preg_match( $inert ? '/^(?:\xEF\xBB\xBF)?(?:#![^\n]*\n)?\s*<\?/' : '/<\?/', $header ) ) {
 			throw new RuntimeException( 'Nonstandard-extension PHP needs an explicit reviewed analysis decision.' );
 		}
 	}
