@@ -105,7 +105,7 @@ for mode in production maintained; do
     prefix=""
     configuration=phpstan.neon
     if [[ "$mode" == maintained ]]; then args=(--maintained); prefix=tests/; configuration=phpstan-maintained.neon; fi
-    for path in template.phtml template.inc template.html template.htm template template.unknown; do
+    for path in template.phtml template.inc template.html template.htm template template.unknown template.json template.lock template.neon template.xml template.yml; do
         for opening in '<?php ran_support_missing_contract();' '<?= ran_support_missing_contract();'; do
             php -r 'echo "\xEF\xBB\xBF<section>", str_repeat("x", 4096), $argv[1];' "$opening" > "$fixture/$prefix$path"
             if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
@@ -116,6 +116,18 @@ for mode in production maintained; do
     printf 'An inert example: <?php ran_support_missing_contract();\n' > "$fixture/$prefix"example.md
     php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}"
     rm "$fixture/$prefix"example.md
+    # Only an actual Bash driver may quote a PHP fixture under the shell suffix.
+    for shebang in '#!/usr/bin/env bash' '#!/bin/bash'; do
+        printf '%s\nprintf '\''<main><?php fixture(); ?></main>'\''\n' "$shebang" > "$fixture/$prefix"example.sh
+        php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}"
+        sed -i '1d' "$fixture/$prefix"example.sh
+        if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+        grep -q 'Nonstandard-extension PHP' "$fixture/guard.log"
+        printf '%s\n<?php ran_support_missing_contract();\n' "$shebang" > "$fixture/$prefix"example.sh
+        if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+        grep -q 'Nonstandard-extension PHP' "$fixture/guard.log"
+        rm "$fixture/$prefix"example.sh
+    done
     printf '<?php\necho json_validate( "{}" );\n' > "$fixture/$prefix"compatibility.php
     if composer --no-plugins --no-interaction --working-dir="$fixture" "analyze:$mode" -- --error-format=json > "$fixture/compatibility.json" 2> "$fixture/negative.log"; then exit 1; fi
     php -r '$r=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);foreach($r["files"][realpath($argv[2])]["messages"]??[] as $m){if(($m["identifier"]??"")==="function.notFound"&&str_contains($m["message"],"json_validate")){exit(0);}}exit(1);' "$fixture/compatibility.json" "$fixture/$prefix"compatibility.php

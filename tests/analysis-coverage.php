@@ -81,8 +81,9 @@ foreach ( new RecursiveIteratorIterator( $iterator ) as $entry ) {
 			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Standalone coverage failure is not HTML output.
 			throw new RuntimeException( 'Cannot inspect a maintained file header.' );
 		}
-		// Only repository documentation/configuration/test-driver formats contain inert examples.
-		$inert = in_array( strtolower( $entry->getExtension() ), array( 'md', 'json', 'lock', 'neon', 'xml', 'yml', 'mjs', 'sh' ), true );
+		// Markdown guidance and Node/Bash test drivers may quote inert PHP examples.
+		$inert = in_array( strtolower( $entry->getExtension() ), array( 'md', 'mjs' ), true )
+			|| ( 'sh' === strtolower( $entry->getExtension() ) && ( str_starts_with( $header, "#!/usr/bin/env bash\n" ) || str_starts_with( $header, "#!/bin/bash\n" ) ) );
 		if ( preg_match( $inert ? '/^(?:\xEF\xBB\xBF)?(?:#![^\n]*\n)?\s*<\?(?:php\b|=)/i' : '/<\?(?:php\b|=)/i', $header ) ) {
 			throw new RuntimeException( 'Nonstandard-extension PHP needs an explicit reviewed analysis decision.' );
 		}
