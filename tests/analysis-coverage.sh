@@ -194,12 +194,31 @@ for mode in production maintained; do
     args=()
     prefix=""
     if [[ "$mode" == maintained ]]; then args=(--maintained); prefix=tests/; fi
-    for command in "php -r 'echo 1;'" "php --run 'echo 1;'" "if php -nr 'echo 1;'; then true; fi" "php --process-code 'echo 1;'" "php <<'PHP'" 'php /dev/stdin' 'printf fixture | php' 'printf fixture | php -n' 'php < code' "env php -r 'echo 1;'"; do
+    for command in "php -r 'echo 1;'" "php --run 'echo 1;'" "if php -nr 'echo 1;'; then true; fi" "php --process-code 'echo 1;'" "php <<'PHP'" 'php /dev/stdin' 'printf fixture | php' 'printf fixture | php -n' 'php < code' "env php -r 'echo 1;'" \
+        "result=\$(php -r 'echo 1;')" "result=\"\$(php -r 'echo 1;')\"" "(php -r 'echo 1;')" "VAR=1 php -r 'echo 1;'" \
+        "FIRST=1 SECOND=two php -r 'echo 1;'" "env VAR=1 php -r 'echo 1;'" \
+        'result=$(php)' '(php -n)' 'VAR=1 php < code'; do
         printf '%s\n' '#!/usr/bin/env bash' "$command" > "$fixture/$prefix"inline.sh
         if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
         grep -q 'Inline or STDIN PHP requires' "$fixture/guard.log"
         rm "$fixture/$prefix"inline.sh
     done
+    # Quoted examples stay data, and explicit maintained helpers may receive stdin data.
+    cp "$root/tests/extract-comment-tokens.php" "$fixture/src/helper.php"
+    for command in \
+        "printf '%s\\n' '(php -r fixture)'" \
+        "printf '%s\\n' 'result=\$(php -r fixture)'" \
+        'printf "%s\n" "(php -r fixture)"' \
+        'printf "%s\n" "result=\$(php -r fixture)"' \
+        'printf "%s\n" "VAR=1 php -r fixture"' \
+        'result=$(php src/helper.php < input)' \
+        '(php src/helper.php < input)' \
+        'VAR=1 php src/helper.php < input'; do
+        printf '%s\n' '#!/usr/bin/env bash' "$command" > "$fixture/$prefix"inline.sh
+        php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}"
+        rm "$fixture/$prefix"inline.sh
+    done
+    rm "$fixture/src/helper.php"
     for invocation in 'spawnSync("php", ["-r", "echo 1;"])' 'spawnSync("php", ["--run", "echo 1;"])' 'spawnSync("php", [])' 'spawnSync("php", { input: "fixture" })'; do
         printf '%s\n' "$invocation" > "$fixture/$prefix"inline.mjs
         if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
