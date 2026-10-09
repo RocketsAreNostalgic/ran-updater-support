@@ -76,14 +76,22 @@ deliberately demonstrates the unsafe contrast.
 
 The production profile above remains unchanged to preserve its isolation from
 synthetic fixture declarations. The additional `phpstan-maintained.neon` profile
-analyzes all six maintained PHP files at level 8, including all four previously
-excluded test/fixture/guard files. `composer analyze` requires both profiles; new
+analyzes all ten maintained PHP files at level 8, including the test/fixture/guard
+files and four CLI helpers. `composer analyze` requires both profiles; new
 root/nested tests and scripts enter maintained analysis automatically. Dependencies,
 Git metadata and disposable `.workspaces` are the only root role exclusions.
 No maintained file exemption or baseline is added. The existing coverage contract
 checks both effective populations after stub-file removal, exact level and commands,
 and rejects new analysis suppressions. Negative controls cover new test/script
 errors, reduced level, restored test exclusions and developer files marked as stubs.
+
+Six previously embedded PHP invocations now call maintained helpers: three
+Bash report checks, the exact BOM/HTML fixture generator, and Node ruleset/comment
+extraction. Generated malformed PHP remains test input data. The coverage guard
+rejects ordinary literal inline-code and STDIN PHP invocations in shell and Node
+drivers for explicit review. This finite check does not interpret dynamic shell or
+JavaScript execution; quoted fixture data remains inert. New helper files enter
+the existing maintained profile automatically.
 
 The coverage guard deliberately uses the locked analyzer's actual NeonAdapter and
 FileExcluder implementation to mirror effective discovery. Three occurrence-local

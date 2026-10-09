@@ -90,20 +90,7 @@ test("actual XML narrowing and property changes fail canonical naming controls",
 // Naming probes cannot establish that every inherited library diagnostic remains
 // active at every future path. Protect the local selector boundary structurally.
 function assertRulesetCoverage(ruleset) {
-  const result = spawnSync("php", ["-r", `
-    $xml = simplexml_load_string(stream_get_contents(STDIN));
-    if ($xml === false) { exit(1); }
-    $values = static fn($nodes) => array_map(static fn($node) => (string) $node, $nodes);
-    $attributes = static fn($nodes) => array_map(static fn($node) => (array) $node->attributes(), $nodes);
-    echo json_encode([
-      'forbidden' => count($xml->xpath('//@phpcs-only | //@phpcbf-only | //include-pattern | //rule//exclude-pattern | //exclude | //severity | //type | //file/@* | //exclude-pattern/@* | //rule/@*[name() != "ref"]')),
-      'files' => $values($xml->xpath('//file')),
-      'exclusions' => $values($xml->xpath('//exclude-pattern')),
-      'rules' => $values($xml->xpath('//rule/@ref')),
-      'arguments' => $attributes($xml->xpath('//arg')),
-      'configuration' => $attributes($xml->xpath('//config')),
-    ], JSON_THROW_ON_ERROR);
-  `], { cwd: root, input: ruleset, encoding: "utf8", timeout: 60000 });
+  const result = spawnSync("php", ["tests/extract-ruleset.php"], { cwd: root, input: ruleset, encoding: "utf8", timeout: 60000 });
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), {
@@ -214,12 +201,7 @@ const persistentVariableFiles = [
 ];
 
 function commentDirectives(source, path = "") {
-  const result = spawnSync("php", ["-r", `
-    $tokens = token_get_all(stream_get_contents(STDIN));
-    echo json_encode(array_values(array_filter($tokens, static fn($token) =>
-      is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)
-    )), JSON_THROW_ON_ERROR);
-  `], { cwd: root, input: source, encoding: "utf8", timeout: 60000 });
+  const result = spawnSync("php", ["tests/extract-comment-tokens.php"], { cwd: root, input: source, encoding: "utf8", timeout: 60000 });
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr);
   const directives = [];

@@ -81,6 +81,23 @@ foreach ( new RecursiveIteratorIterator( $iterator ) as $entry ) {
 			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Standalone coverage failure is not HTML output.
 			throw new RuntimeException( 'Cannot inspect a maintained file header.' );
 		}
+		// Reject ordinary inline/STDIN interpreter forms; fixture strings passed to PHPCS remain data.
+		// This is a finite invocation boundary, not a parser for dynamic shell or JavaScript execution.
+		// Skip complete inert quotes before recognizing subshells or literal environment assignments.
+		// Double-quoted command substitutions remain executable; this does not expand shell values.
+		$shell_boundary = <<<'REGEX'
+(?:'[^'\r\n]*'|"(?:\\.|[^"\\$\r\n]|\$(?!\())*")(*SKIP)(*F)|(?:^|\R|[;&|(])[ \t]*(?:run:[ \t]*)?(?:(?:if|then)[ \t]+)?(?:(?:env|exec|command)[ \t]+)?(?:[A-Za-z_][A-Za-z0-9_]*=[^\s;|&()'"$]+[ \t]+)*
+REGEX;
+		$shell_driver   = in_array( strtolower( $entry->getExtension() ), array( 'sh', 'yml', 'yaml' ), true ) || preg_match( '/\A#![^\n]*(?:bash|sh)\b/', $header );
+		if ( $shell_driver && preg_match( '~' . $shell_boundary . 'php\b(?=\s|[;&|<]|$)[^\n\'"]*(?:\s-[A-Za-z]*[rBRE]\b|\s--(?:run|process-begin|process-code|process-end)\b|<<|/dev/stdin)~', $header ) ) {
+			throw new RuntimeException( 'Inline or STDIN PHP requires a directly analyzed maintained helper.' );
+		}
+		if ( $shell_driver && preg_match( '~' . $shell_boundary . 'php\b(?:(?:\s+-[nq])|(?:\s+-d\s+[^\s;&|<]+))*\s*(?:<|(?=[\r\n;&|)]|$))~', $header ) ) {
+			throw new RuntimeException( 'Inline or STDIN PHP requires a directly analyzed maintained helper.' );
+		}
+		if ( in_array( strtolower( $entry->getExtension() ), array( 'js', 'mjs', 'cjs', 'ts' ), true ) && preg_match( '~(?:spawnSync|execFileSync|spawn|execFile)\s*\(\s*[\'"]php[\'"]\s*,\s*(?:\[\s*(?:[\'"](?:-|/dev/stdin)|\])|\{)~', $header ) ) {
+			throw new RuntimeException( 'Inline or STDIN Node PHP requires a directly analyzed maintained helper.' );
+		}
 		// Markdown guidance and Node/Bash test drivers may quote inert PHP examples.
 		$inert = in_array( strtolower( $entry->getExtension() ), array( 'md', 'mjs' ), true )
 			|| ( 'sh' === strtolower( $entry->getExtension() ) && ( str_starts_with( $header, "#!/usr/bin/env bash\n" ) || str_starts_with( $header, "#!/bin/bash\n" ) ) );
