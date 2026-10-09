@@ -20,7 +20,7 @@ jobs:
       php-floor: '8.2'
       php-current: '8.5'
       php-extensions: zip
-      node-version: '24.11.0'
+      node-version: '24.21.0'
 
   quality:
     if: ${{ always() }}

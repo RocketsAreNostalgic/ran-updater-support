@@ -63,7 +63,7 @@ or own temporary files, permissions, cleanup, credentials or deployment state.
 
 ## Development and releases
 
-Run `composer install`, then `composer check` with PHP 8.2 and Node 24.11.0.
+Run `composer install`, then `composer check` with PHP 8.2 and Node 24.21.0.
 Composer consumes the package through its Git version; `composer.json` deliberately
 has no version field. The repository now uses the organisation-owned Profile A
 release lifecycle: Release Please owns version selection, changelog, release PR,
