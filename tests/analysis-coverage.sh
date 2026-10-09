@@ -10,12 +10,29 @@ cp -R "$root/src" "$fixture/src"
 ln -s "$root/vendor" "$fixture/vendor"
 analyze() { composer --no-plugins --no-interaction --working-dir="$fixture" analyze:production -- --error-format=json; }
 analyze > "$fixture/clean.json"
+# Real helper failures cannot be mistaken for successful diagnostic validation.
+if php "$root/tests/assert-analysis-diagnostic.php" > "$fixture/helper.log" 2>&1; then exit 1; fi
+grep -q 'are required' "$fixture/helper.log"
+if php "$root/tests/assert-analysis-diagnostic.php" "$fixture/missing.json" "$fixture/src/ArchiveSafety.php" function.notFound missing > "$fixture/helper.log" 2>&1; then exit 1; fi
+grep -q 'Cannot read the checker report' "$fixture/helper.log"
+printf 'invalid JSON' > "$fixture/malformed.json"
+if php "$root/tests/assert-analysis-diagnostic.php" "$fixture/malformed.json" "$fixture/src/ArchiveSafety.php" function.notFound missing > "$fixture/helper.log" 2>&1; then exit 1; fi
+if php "$root/tests/assert-analysis-diagnostic.php" "$fixture/clean.json" "$fixture/missing.php" function.notFound missing > "$fixture/helper.log" 2>&1; then exit 1; fi
+grep -q 'Selected diagnostic file does not exist' "$fixture/helper.log"
+if php "$root/tests/assert-analysis-diagnostic.php" "$fixture/clean.json" "$fixture/src/ArchiveSafety.php" function.notFound missing; then exit 1; fi
+if php "$root/tests/generate-template-prefix.php" > "$fixture/helper.log" 2>&1; then exit 1; fi
+grep -q 'Template opening argument is required' "$fixture/helper.log"
+php "$root/tests/generate-template-prefix.php" fixture > "$fixture/prefix.actual"
+printf '\357\273\277<section>' > "$fixture/prefix.expected"
+printf 'x%.0s' {1..4096} >> "$fixture/prefix.expected"
+printf fixture >> "$fixture/prefix.expected"
+cmp "$fixture/prefix.expected" "$fixture/prefix.actual"
 mkdir -p "$fixture/new-product/contracts" "$fixture/src/tests" "$fixture/tests"
 for path in root-contract.php new-product/contracts/split.php src/tests/runtime-contract.php; do
     printf '<?php\nran_support_missing_contract();\n' > "$fixture/$path"
     php "$root/tests/analysis-coverage.php" "$fixture"
     if analyze > "$fixture/negative.json" 2> "$fixture/negative.log"; then exit 1; fi
-    php -r '$r=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);foreach($r["files"][realpath($argv[2])]["messages"]??[] as $m){if(($m["identifier"]??"")==="function.notFound"&&str_contains($m["message"],"ran_support_missing_contract")){exit(0);}}exit(1);' "$fixture/negative.json" "$fixture/$path"
+    php "$root/tests/assert-analysis-diagnostic.php" "$fixture/negative.json" "$fixture/$path" function.notFound ran_support_missing_contract
     rm "$fixture/$path"
 done
 # Moving an existing maintained source beyond its old src root retains coverage.
@@ -66,7 +83,7 @@ for path in tests/new-fixtures/contract.php scripts/maintenance.php; do
     printf '<?php\nran_support_missing_contract();\n' > "$fixture/$path"
     php "$root/tests/analysis-coverage.php" "$fixture" --maintained
     if maintained > "$fixture/maintained-negative.json" 2> "$fixture/negative.log"; then exit 1; fi
-    php -r '$r=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);foreach($r["files"][realpath($argv[2])]["messages"]??[] as $m){if(($m["identifier"]??"")==="function.notFound"&&str_contains($m["message"],"ran_support_missing_contract")){exit(0);}}exit(1);' "$fixture/maintained-negative.json" "$fixture/$path"
+    php "$root/tests/assert-analysis-diagnostic.php" "$fixture/maintained-negative.json" "$fixture/$path" function.notFound ran_support_missing_contract
     rm "$fixture/$path"
 done
 for configuration in phpstan.neon phpstan-maintained.neon; do
@@ -107,7 +124,7 @@ for mode in production maintained; do
     if [[ "$mode" == maintained ]]; then args=(--maintained); prefix=tests/; configuration=phpstan-maintained.neon; fi
     for path in template.phtml template.inc template.html template.htm template template.unknown template.json template.lock template.neon template.xml template.yml; do
         for opening in '<?php ran_support_missing_contract();' '<?= ran_support_missing_contract();'; do
-            php -r 'echo "\xEF\xBB\xBF<section>", str_repeat("x", 4096), $argv[1];' "$opening" > "$fixture/$prefix$path"
+            php "$root/tests/generate-template-prefix.php" "$opening" > "$fixture/$prefix$path"
             if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
             grep -q 'Nonstandard-extension PHP' "$fixture/guard.log"
             rm "$fixture/$prefix$path"
@@ -130,7 +147,7 @@ for mode in production maintained; do
     done
     printf '<?php\necho json_validate( "{}" );\n' > "$fixture/$prefix"compatibility.php
     if composer --no-plugins --no-interaction --working-dir="$fixture" "analyze:$mode" -- --error-format=json > "$fixture/compatibility.json" 2> "$fixture/negative.log"; then exit 1; fi
-    php -r '$r=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);foreach($r["files"][realpath($argv[2])]["messages"]??[] as $m){if(($m["identifier"]??"")==="function.notFound"&&str_contains($m["message"],"json_validate")){exit(0);}}exit(1);' "$fixture/compatibility.json" "$fixture/$prefix"compatibility.php
+    php "$root/tests/assert-analysis-diagnostic.php" "$fixture/compatibility.json" "$fixture/$prefix"compatibility.php function.notFound json_validate
     sed -i 's/phpVersion: 80200/phpVersion: 80300/' "$fixture/$configuration"
     composer --no-plugins --no-interaction --working-dir="$fixture" "analyze:$mode" -- --error-format=json > "$fixture/compatibility-raised.json"
     if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
@@ -171,3 +188,23 @@ for mode in production maintained; do
     rm "$fixture/$prefix"example.xml
 done
 echo 'PASS executable bare short tags under both INI settings and genuine XML boundaries.'
+
+# Ordinary inline interpreters cannot silently create a second unanalysed PHP surface.
+for mode in production maintained; do
+    args=()
+    prefix=""
+    if [[ "$mode" == maintained ]]; then args=(--maintained); prefix=tests/; fi
+    for command in "php -r 'echo 1;'" "php --run 'echo 1;'" "if php -nr 'echo 1;'; then true; fi" "php --process-code 'echo 1;'" "php <<'PHP'" 'php /dev/stdin' 'printf fixture | php' 'printf fixture | php -n' 'php < code' "env php -r 'echo 1;'"; do
+        printf '%s\n' '#!/usr/bin/env bash' "$command" > "$fixture/$prefix"inline.sh
+        if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+        grep -q 'Inline or STDIN PHP requires' "$fixture/guard.log"
+        rm "$fixture/$prefix"inline.sh
+    done
+    for invocation in 'spawnSync("php", ["-r", "echo 1;"])' 'spawnSync("php", ["--run", "echo 1;"])' 'spawnSync("php", [])' 'spawnSync("php", { input: "fixture" })'; do
+        printf '%s\n' "$invocation" > "$fixture/$prefix"inline.mjs
+        if php "$root/tests/analysis-coverage.php" "$fixture" "${args[@]}" > "$fixture/guard.log" 2>&1; then exit 1; fi
+        grep -q 'Inline or STDIN Node PHP requires' "$fixture/guard.log"
+        rm "$fixture/$prefix"inline.mjs
+    done
+done
+echo 'PASS ordinary inline and STDIN PHP fail closed in shell and Node drivers.'

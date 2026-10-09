@@ -58,6 +58,10 @@ repository workflow explicitly selects a Blacksmith runner.
 production inference; `phpstan-maintained.neon` includes every maintained PHP file,
 including current/future tests and scripts, automatically from the repository root.
 Only root dependencies, Git metadata and disposable .workspaces are exempt.
+Executed PHP from shell and Node tests belongs in directly analyzed maintained
+helpers. The guard rejects ordinary literal inline-code and STDIN interpreter
+forms for review; it does not interpret dynamic shell or JavaScript execution.
+Deliberately malformed generated fixtures remain input data.
 The existing analysis coverage guard checks both effective populations, exact
 commands, level 8, configured stubs and suppression inventory. Three exact local
 annotations cover four locked PHPStan internal-API compatibility notifications in
