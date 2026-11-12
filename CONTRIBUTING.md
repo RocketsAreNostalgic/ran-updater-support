@@ -130,6 +130,31 @@ bypasses, precise annotation acceptance, the immediate outside diagnostic, new
 persistent annotation rejection and future declarations inside the three allowance files.
 This change adds no source exemptions and changes no executable PHP or dependencies.
 
+
+## Error-reporting inventory (#54)
+
+This package contains no catch blocks, suppression operators, logging, or
+filesystem, lock or journal code. The only places it discards a computed reason
+are listed below. Each row records where the reason is known, what leaves the
+site, and why nothing sensitive can leave. The package holds no credentials,
+tokens, URLs or remote text, so no value is redacted; the guarantee is that only
+fixed identifiers are returned.
+
+| ID | File and site | Known at site | Leaves site | Class | Reason id | Redaction rationale | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | `ArchiveSafety::normalize_path` | Which of ten rules failed | `null` (unchanged); `path_failure()` returns the reason | B | `PATH_FAILURES` | Fixed identifiers; the name is never returned | Reported |
+| 2 | `RepositoryRelativePath::normalize` | Which of eleven rules failed | Fixed-message `InvalidRepositoryPathException` with `reason()` | B | `InvalidRepositoryPathException::REASONS` | Fixed message and identifiers; the path is never returned | Reported |
+| 3 | `ArchiveSafety::entry_type_failure` | Five causes behind two codes | Two legacy codes (unchanged); `entry_type_reason()` returns the cause | B | `ENTRY_TYPE_REASONS` | Fixed identifiers | Reported |
+| 4 | `ArchiveSafety::collision_failure` | The offending path | Code only (`path_duplicate` or `file_parent_collision`) | B | none added | A path is untrusted publisher text and cannot be proven free of sensitive-looking text; the code already names the cause | Deferred: callers that need the path hold the entries and must escape and bound it |
+| 5 | `ArchiveSafety::normalize_path` control-character check | Subsumed by the next check | None | none | none | Redundant, not a defect | Kept so `path_control_character` stays distinct |
+
+Existing codes must not gain values: the branch updater compares
+`entry_type_failure()` and `collision_failure()` results by equality with the
+known codes and would treat any new non-null value as a pass. New reasons belong
+in sibling methods. `tests/contract.php` pins the legacy rules as frozen
+reference implementations and compares them with the current methods over a
+generated corpus.
+
 ## Failure-text screener and its corpus (#57)
 
 `FailureText` is the single source of failure-text screening for Core, the
@@ -165,3 +190,4 @@ branch updater and the release updater; the policy and rule list are in the
   consumer cannot work around it with its closed reason code.
 - Run `composer test:failure-text` and `composer test:failure-text-mutation`, or
   `composer check`, before committing.
+
