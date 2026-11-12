@@ -156,7 +156,7 @@ return ( static function (): array {
 		'jwt short segments'              => 'eyJa.eyJb.sig',
 		'jwt prefix only'                 => 'eyJ',
 		'jwt header'                      => 'eyJhbGciOiJIUzI1NiJ9',
-		'bitbucket app password'          => 'ATBBabc',
+		'bitbucket ATBB prefix'             => 'ATBBabc',
 		'bitbucket repository token'      => 'ATCTT3xabc',
 		'bitbucket api token'             => 'ATATT3xabc',
 		'google api key'                  => 'AIzaSyabc',
