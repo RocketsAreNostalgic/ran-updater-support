@@ -42,12 +42,12 @@ declare(strict_types=1);
 	foreach ( $calls[2] as $index => $name ) {
 		$mutants[ $name ] = array( 'replace' => array( 'self::' . $calls[1][ $index ] . '( $text )' => 'false' ) );
 	}
-	$mutants['printable_ascii_only']    = array( 'replace' => array( "1 !== preg_match( '#\\A[\\x20-\\x7E]+\\z#', \$text )" => 'false' ) );
+	$mutants['printable_ascii_only']    = array( 'replace' => array( "! self::test( '#\\A[\\x20-\\x7E]+\\z#', \$text )" => 'false' ) );
 	$mutants['bound_before_screening']  = array( 'replace' => array( "'' === \$text || self::hostile( \$text, \$prose )" => "'' === \$text || self::hostile( substr( \$text, 0, \$max_length ), \$prose )" ) );
 	$mutants['strict_applies_prose']    = array( 'replace' => array( 'return self::screen( $text, $max_length, true );' => 'return self::screen( $text, $max_length, false );' ) );
 	$mutants['display_skips_prose']     = array( 'replace' => array( 'return self::screen( $text, $max_length, false );' => 'return self::screen( $text, $max_length, true );' ) );
-	$mutants['identifier_shape']        = array( 'replace' => array( "1 === preg_match( '#\\A[a-z][a-z0-9_]{0,95}\\z#', \$text ) && " => '' ) );
-	$mutants['identifier_length_limit'] = array( 'replace' => array( '{0,95}\\z#' => '{0,200}\\z#' ) );
+	$mutants['identifier_shape']        = array( 'replace' => array( "self::test( '#\\A[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*\\z#', \$text ) && " => '' ) );
+	$mutants['identifier_length_limit'] = array( 'replace' => array( ' || strlen( $text ) > self::MAX_IDENTIFIER_LENGTH' => '' ) );
 	$mutants['identifier_shape_rules']  = array( 'replace' => array( ' && ! self::hostile( $text, false )' => '' ) );
 	$mutants['input_length_cap']        = array( 'replace' => array( ' || strlen( $text ) > self::MAX_INPUT_LENGTH' => '' ) );
 	$mutants['bound_lower_limit']       = array( 'replace' => array( '$max_length < 1 || ' => '' ) );
@@ -57,6 +57,19 @@ declare(strict_types=1);
 	$mutants['commit_id_start_anchor']  = array( 'replace' => array( "'#\\A(?:[0-9a-f]{40}" => "'#(?:[0-9a-f]{40}" ) );
 	$mutants['commit_id_lowercase']     = array( 'replace' => array( '[0-9a-f]{40}|[0-9a-f]{64}' => '[0-9a-fA-F]{40}|[0-9a-fA-F]{64}' ) );
 	$mutants['commit_id_exact_lengths'] = array( 'replace' => array( '[0-9a-f]{40}|[0-9a-f]{64}' => '[0-9a-f]{32,64}' ) );
+
+	// Branch and threshold mutants, one alternation branch or one limit each.
+	/** @var list<array{string, string, string}> $branch_mutants */
+	$branch_mutants = require __DIR__ . '/fixtures/failure-text-mutants.php';
+	foreach ( $branch_mutants as $branch_mutant ) {
+		$mutants[ $branch_mutant[0] ] = array( 'replace' => array( $branch_mutant[1] => $branch_mutant[2] ) );
+	}
+
+	// Equivalent mutants: no input can tell them apart from the original, with the reason. Everything else must die.
+	$equivalent = array(
+		'pcre strip fails open' => 'no backtrack limit lets the table rules run and then fails preg_replace(); the limit already fails the table rules first, so the guard is defensive',
+		'pcre split fails open' => 'preg_split() cannot fail where the preg_replace() just before it, on the same text and limits, succeeded; the guard is defensive',
+	);
 
 	$probe = static function ( string $mutant, string $name ) use ( $corpus ): ?string {
 		$call = static fn( string $method, string $text, int ...$bound ): mixed => ( new ReflectionMethod( $mutant, $method ) )->invoke( null, $text, ...$bound );
@@ -98,6 +111,47 @@ declare(strict_types=1);
 			}
 
 			return null;
+		}
+		if ( str_starts_with( $name, 'pcre ' ) ) {
+			$saved     = array( ini_get( 'pcre.backtrack_limit' ), ini_get( 'pcre.jit' ) );
+			$killed_by = null;
+			ini_set( 'pcre.jit', '0' ); // phpcs:ignore WordPress.PHP.IniSet.Risky -- Test-only engine limits, restored below.
+			foreach ( array( '1', '5' ) as $limit ) {
+				ini_set( 'pcre.backtrack_limit', $limit ); // phpcs:ignore WordPress.PHP.IniSet.Risky -- Test-only engine limits, restored below.
+				foreach ( array_merge( $corpus['hostile'], $corpus['strict_only'] ) as $label => $text ) {
+					try {
+						if ( null !== $call( 'strict', $text, 120 ) || ( isset( $corpus['hostile'][ $label ] ) && null !== $call( 'display', $text, 120 ) ) ) {
+							$killed_by = 'engine failure: ' . $label;
+							break 2;
+						}
+					} catch ( Throwable $error ) {
+						$killed_by = 'engine failure raised ' . $error::class . ': ' . $label;
+						break 2;
+					}
+				}
+			}
+			ini_set( 'pcre.backtrack_limit', (string) $saved[0] ); // phpcs:ignore WordPress.PHP.IniSet.Risky -- Restores the saved limit.
+			ini_set( 'pcre.jit', (string) $saved[1] ); // phpcs:ignore WordPress.PHP.IniSet.Risky -- Restores the saved setting.
+
+			return $killed_by;
+		}
+		// Over-blocking mutants: text that must pass is dropped.
+		foreach ( $corpus['benign'] as $label => $text ) {
+			foreach ( array( 'strict', 'display' ) as $method ) {
+				if ( $call( $method, $text, 4096 ) !== $text ) {
+					return 'over-blocked by ' . $method . ': ' . $label;
+				}
+			}
+		}
+		foreach ( $corpus['display_only'] as $label => $text ) {
+			if ( $call( 'display', $text, 4096 ) !== $text ) {
+				return 'over-blocked by display: ' . $label;
+			}
+		}
+		foreach ( $corpus['identifiers'] as $label => $text ) {
+			if ( $call( 'identifier', $text ) !== $text ) {
+				return 'over-blocked identifier: ' . $label;
+			}
 		}
 		foreach ( array( 120, 255 ) as $bound ) {
 			foreach ( $corpus['hostile'] as $label => $text ) {
@@ -167,6 +221,10 @@ declare(strict_types=1);
 			}
 		}
 		$killed_by = $run( $name, $code );
+		if ( null === $killed_by && isset( $equivalent[ $name ] ) ) {
+			$say( "equivalent {$name}: {$equivalent[ $name ]}" );
+			continue;
+		}
 		if ( null === $killed_by ) {
 			$survived[] = $name;
 			$say( "SURVIVED {$name}" );
@@ -185,5 +243,5 @@ declare(strict_types=1);
 	if ( array() !== $survived ) {
 		$fail( 'surviving mutants: ' . implode( ', ', $survived ) );
 	}
-	$say( 'failure-text-mutation: ' . count( $mutants ) . ' mutants, all killed' );
+	$say( 'failure-text-mutation: ' . ( count( $mutants ) - count( $equivalent ) ) . ' of ' . count( $mutants ) . ' mutants killed, ' . count( $equivalent ) . ' documented equivalent' );
 } )();

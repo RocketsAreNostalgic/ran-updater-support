@@ -100,6 +100,11 @@ use RAN\UpdaterSupport\V1\FailureText;
 		}
 	}
 
+	// A null input is null in every mode.
+	if ( null !== FailureText::strict( null, 10 ) || null !== FailureText::display( null, 10 ) || null !== FailureText::identifier( null ) || null !== FailureText::commit_id( null ) ) {
+		$fail( 'a null input was not dropped' );
+	}
+
 	// Caller misuse fails closed.
 	foreach ( $modes as $mode => $screen ) {
 		foreach ( array( 0, -1, FailureText::MAX_INPUT_LENGTH + 1, PHP_INT_MAX, PHP_INT_MIN ) as $bound ) {
@@ -223,7 +228,7 @@ use RAN\UpdaterSupport\V1\FailureText;
 		if ( FailureText::strict( $result, $bound ) !== $result ) {
 			$fail( 'the screen is not idempotent' );
 		}
-		if ( 1 === preg_match( '#[<>&{}\[\]|;`=@/\\\\~]|%[0-9a-fA-F]{2}|:\S|\?\S#', $result ) ) {
+		if ( 1 === preg_match( '#[<>&{}\[\]|`=@/\\\\~]|%[0-9a-fA-F]{2}|[:;?]\S#', $result ) ) {
 			$fail( 'the result holds a structural character' );
 		}
 		if ( 1 === preg_match( '#[0-9a-f]{32}#i', (string) preg_replace( '#[^0-9A-Za-z]+#', '', $result ) ) ) {
@@ -244,6 +249,38 @@ use RAN\UpdaterSupport\V1\FailureText;
 			}
 		}
 	}
+
+	// A regular-expression engine failure is never evidence of safety: under a starved engine every hostile
+	// text is still dropped, and nothing is ever returned altered.
+	$saved = array( ini_get( 'pcre.backtrack_limit' ), ini_get( 'pcre.jit' ) );
+	ini_set( 'pcre.jit', '0' ); // phpcs:ignore WordPress.PHP.IniSet.Risky -- Test-only engine limits, restored below.
+	foreach ( array( '1', '5', '50' ) as $limit ) {
+		ini_set( 'pcre.backtrack_limit', $limit ); // phpcs:ignore WordPress.PHP.IniSet.Risky -- Test-only engine limits, restored below.
+		foreach ( array_merge( $hostile, $strict_only ) as $label => $text ) {
+			if ( null !== FailureText::strict( $text, 120 ) ) {
+				$fail( "strict returned hostile text under backtrack limit {$limit}: {$label}" );
+			}
+		}
+		foreach ( $hostile as $label => $text ) {
+			if ( null !== FailureText::display( $text, 120 ) ) {
+				$fail( "display returned hostile text under backtrack limit {$limit}: {$label}" );
+			}
+		}
+		foreach ( $corpus['not_identifiers'] as $label => $text ) {
+			if ( null !== FailureText::identifier( $text ) ) {
+				$fail( "identifier accepted text under backtrack limit {$limit}: {$label}" );
+			}
+		}
+		foreach ( $benign as $label => $text ) {
+			foreach ( array( FailureText::strict( $text, 4096 ), FailureText::display( $text, 4096 ) ) as $result ) {
+				if ( null !== $result && $result !== $text ) {
+					$fail( "an engine failure altered benign text: {$label}" );
+				}
+			}
+		}
+	}
+	ini_set( 'pcre.backtrack_limit', (string) $saved[0] ); // phpcs:ignore WordPress.PHP.IniSet.Risky -- Restores the saved limit.
+	ini_set( 'pcre.jit', (string) $saved[1] ); // phpcs:ignore WordPress.PHP.IniSet.Risky -- Restores the saved setting.
 
 	echo 'failure-text: ' . count( $hostile ) . ' hostile, ' . count( $benign ) . ' benign, ' . $accepted . " accepted generated cases\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CLI evidence line, never HTML.
 } )();

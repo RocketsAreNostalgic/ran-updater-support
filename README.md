@@ -74,7 +74,7 @@ about credentials is treated as a credential. Pick the mode by where the text co
 | --- | --- | --- | --- | --- |
 | `strict( $text, $max )` | untrusted free-text detail from a foreign package | every shape rule and the prose credential-word rules | caller supplies, small (updaters use 64 to 120) | updater rejection and failure detail (release updater, branch updater); any logger value that is not an identifier or commit id |
 | `display( $text, $max )` | curated sentences Core shows | shape rules only; no prose-word rule; full sentences with spaces and punctuation | caller supplies, longer (Core uses 255 to 512) | Core provider diagnostics, webhook remediation, activity text |
-| `identifier( $text )` | a closed id | exactly `[a-z][a-z0-9_]{0,95}` and not hostile by any shape rule; never truncated | 96 | diagnostic ids and reason codes (`ran_booster_storage_transaction_unavailable`, `token_expired`); logger identifier values |
+| `identifier( $text )` | a closed id | exactly `[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*`, at most 96 bytes, and not hostile by any shape rule; never truncated | 96 | diagnostic ids and reason codes, snake_case, dotted or dashed (`ran_booster_storage_transaction_unavailable`, `token_expired`, `gh.credential.valid`, `webhook.operation_succeeded`, `github-fine-grained-pat-v1`); logger identifier values |
 | `commit_id( $text )` | a resolved ref | exactly 40 or 64 lowercase hex digits | fixed | commit ids kept by Core's logger |
 
 `display( 'Check the token permissions and organisation approval.' )` passes and
@@ -121,16 +121,17 @@ by `tests/failure-text-mutation.php`.
 | Group | Dropped | Rule names |
 | --- | --- | --- |
 | Characters | anything outside printable ASCII | `printable_ascii_only` |
-| Markup | `<` `>` `&` (tags and entity forms), `{` `}` `[` `]`, `` ` ``, `\|`, `;` | `angle_bracket`, `ampersand`, `bracket_or_brace`, `backtick`, `pipe`, `semicolon` |
+| Markup | `<` `>` `&` (tags and entity forms), `{` `}` `[` `]`, `` ` ``, `\|`, and a `;` directly followed by text (`a;b`; a `;` before a space or at the end is prose punctuation) | `angle_bracket`, `ampersand`, `bracket_or_brace`, `backtick`, `pipe`, `semicolon` |
 | Assignments | any `=` (query strings, `name=value`, `sha256=`, DSNs) | `equals` |
 | Userinfo | any `@` (userinfo, email, `git@host:`), any `%XX` escape (`%40`, `%2e`) | `at_sign`, `percent_escape` |
 | URLs | a colon or question mark attached to the next character (`https://`, `mailto:a`, `a:b`, `?token`); a scheme word then a colon even with spaces (`https :`) | `colon_attached`, `question_attached`, `url_scheme_word` |
-| Paths | any `/`, `\` or `~`; `wp-content`, `wp-config`, `wp-admin`, `wp-includes`, `.htaccess`, `.htpasswd`, `public_html`; WordPress and PHP session cookie names; private-key headers | `slash`, `backslash`, `tilde`, `wordpress_path_word`, `session_cookie_name`, `private_key_material` |
-| Credential words (STRICT only) | `password` (and `passw0rd`), `passwd`, `pwd`, `passphrase`, `passcode`, `secret`, `token`, `api key`, `apikey`, `authorization`, `signature`, `nonce`, `cookie`, `credential` (and plurals) followed by any value, inside a longer word or across an underscore (`usertoken x`, `client_secret x`) but not before a letter (`tokenizer`); `Basic` or `Bearer` followed by any text | `credential_*`, `bearer_or_basic` |
+| Paths | any `/`, `\` or `~`; `wp-content`, `wp-admin`, `wp-includes`, `.htaccess`, `.htpasswd`, `public_html`; WordPress and PHP session cookie names; private-key headers | `slash`, `backslash`, `tilde`, `wordpress_path_word`, `session_cookie_name`, `private_key_material` |
+| Credential words (STRICT only) | `password` (and `passw0rd`), `passwd`, `pwd`, `passphrase`, `passcode`, `pass`, `pw`, `passwort`, `jwt`, `auth`, `key is`, `pin is`, `access key`, `secret`, `token`, `api key`, `apikey`, `authorization`, `signature`, `nonce`, `cookie`, `credential` (and plurals) followed by any value, inside a longer word or across an underscore (`usertoken x`, `client_secret x`) but not before a letter (`tokenizer`); `Basic` or `Bearer` followed by any text | `credential_*`, `credential_other`, `bearer_or_basic` |
 | Bearer or Basic token (every mode) | `Basic` or `Bearer` followed by token-like text (a digit, capital letter, `+`, `/` or `=` in it): `Bearer abc123`, `Basic dXNlcjpwYXNz`; `Basic information` is not one | `bearer_basic_token` |
-| Token prefixes at any length, anywhere in the text (`xAKIA...` and bare `AKIA` included) | `gh[pousr]_` and `ghp-`, `github_pat_`, `glpat-` and kin, `xox[abprs]-`, `xapp-`, `npm_`, `sk_live_`, `sk_test_`, `pk_live_`, `sk-`, `AKIA`, `ASIA`, `eyJ`, Bitbucket `ATBB`, `ATCTT3` and `ATATT3`, `AIza`, `ya29.`, `shpat_`, `dop_v1_` | `prefix_*` |
+| WordPress Application Password (every mode) | six space-separated groups of four letters or digits, as WordPress displays one: `abcd efgh ijkl mnop qrst uvwx` (six consecutive four-letter words of ordinary prose match too) | `wordpress_app_password` |
+| Token prefixes at any length, anywhere in the text (`xAKIA...` and bare `AKIA` included) | `gh[pousr]_` and `ghp-`, `github_pat_`, `glpat-` and kin, `xox[abprs]-`, `xapp-`, `npm_`, `sk_live_`, `sk_test_`, `pk_live_`, `sk-`, `AKIA`, `ASIA`, `AROA`, `AIDA`, `ABIA`, `ACCA`, `AGPA`, `ANPA`, `ANVA`, `APKA`, `eyJ`, Bitbucket `ATBB`, `ATCTT3` and `ATATT3`, `AIza`, `ya29.`, `shpat_`, `dop_v1_` | `prefix_*` |
 | Digests | `sha1`, `sha256`, `sha-512`, `md5`, `blake2` prefixes; 32 or more hex digits once separators, spaces and punctuation are removed (this also drops UUIDs); 16 or more hex digits in one word | `digest_prefix`, `hex_run`, `hex_word` |
-| Long tokens | a 32 or more character word, punctuation removed, holding a digit or capital letter (base64, base64url, mixed tokens); any run of 25 or more letters and digits; spaced chunks that each mix letters and digits, 24 or more characters in all | `long_mixed_run`, `long_word`, `dense_chunks` |
+| Long tokens | a 32 or more character word, punctuation removed, holding a digit or capital letter (base64, base64url, mixed tokens); any run of 25 or more letters and digits; space-separated chunks that each mix letters and digits (or lower then upper case): 20 or more characters across two or more chunks, or 24 or more in one | `long_mixed_run`, `long_word`, `dense_chunks` |
 
 A lowercase snake_case code such as `plugin_update_fatal_error_rollback_successful`
 is not a long token: its separators split it into short parts.
@@ -142,8 +143,10 @@ dropped benign sentence only costs a less specific message, because callers keep
 the closed reason code. Every rule is therefore deliberately broad. Benign text
 that is now dropped, so callers must not rely on it:
 
-- any text containing `/`, `\`, `~`, `=`, `@`, `;`, `|`, `&`, `<`, `>`, brackets or
-  braces: `TCP/IP`, `and/or`, `R&D`, `a=b`, `[error]`;
+- any text containing `/`, `\`, `~`, `=`, `@`, `|`, `&`, `<`, `>`, brackets or
+  braces, or a `;` directly followed by text: `TCP/IP`, `and/or`, `R&D`, `a=b`,
+  `[error]`, `a;b`. Admin copy must use ASCII and avoid `/`: curly quotes, arrows
+  and ellipses are dropped, and so are phrases such as `owner/repository`;
 - a colon or question mark followed directly by text: `12:30`, `ratio 3:1`,
   `Error:x`, `what?now`, timestamps such as `2026-11-12T10:00:00Z`;
 - in STRICT only, a credential word followed by anything: `Webhook signature missing`, `Token
@@ -154,21 +157,55 @@ that is now dropped, so callers must not rely on it:
 - non-ASCII text, any run of 25 or more letters and digits, and any text holding
   `AKIA`, `ASIA`, `eyJ`, `sk-` or `npm_` (`ASIAN`, long CamelCase names, `task-force`,
   `disk-full`), because token prefixes drop at any position;
-- runs of space-separated CamelCase or letter-and-digit words that total 24 or more
-  characters (a list of product names such as `WordPress WooCommerce JetPack`);
+- runs of space-separated CamelCase or letter-and-digit words that total 20 or more
+  characters across two or more words (`WordPress WooCommerce JetPack`), and six
+  consecutive four-letter words (`this that with from they have`);
 - a number of 16 or more digits, and a few words ending `ghs-` or `ghr-` such as
   `doughs-`.
 
-Not dropped, on purpose: short commit ids (7 to 15 hex digits), words that merely
+Not dropped, on purpose: prose punctuation `;` before a space, a bare file name such as
+`wp-config.php` (real paths are caught by `/`, `\` and `:`), short commit ids (7 to 15 hex digits), words that merely
 contain a credential word (`tokenizer`, `secretary`), plain prose, fixed lowercase
 snake_case codes and ordinary version numbers. SQL fragments are not a rule: the
-punctuation SQL needs to carry data (`=`, `;`) is already dropped, and a keyword
+punctuation SQL needs to carry data (`=`, and `;` before text) is already dropped, and a keyword
 rule would block ordinary prose (`update the plugin from the list`) without
 closing a credential or path leak.
 
 Closed reason identifiers go through `identifier()` or are validated against their
 closed list; curated Core sentences go through `display()`. Only text whose
 content the package does not control needs `strict()`.
+
+### Scope and limits
+
+- **`display()` is only for fixed Core strings and provider-authored fixed remediation.**
+  Never pass it text that echoes remote or foreign content: an HTTP body, an exception
+  or `WP_Error` message, a header value, a publisher string. That text needs `strict()`,
+  or no text at all and a closed reason code. `display()` omits the prose
+  credential-word rule precisely because the caller vouches that the sentence is curated.
+- **Engine failures fail closed.** Every regular expression goes through one helper.
+  If the engine fails (a backtrack or JIT stack limit, `preg_last_error()` set), the
+  public method returns `null`; a failure is never read as "no match". A test runs
+  the corpus under starved limits and requires every hostile string to be dropped.
+- **Input.** The public methods accept `?string` and return `null` for `null`. Anything
+  else is a type error under `strict_types`.
+- **Not caught.** Bare hostnames, IP addresses and file names that contain none of
+  `/ : @` (`db.internal`, `192.168.0.1`, `wp-config.php`) are not credentials or paths and
+  pass; the shape rules catch paths and URLs by their separators, not by name. A random
+  token of lowercase letters only, or any token shorter than the thresholds with no
+  distinctive prefix, cannot be told from words. A re-encoding the rules do not name
+  is not detected.
+- **`identifier()` is only for closed, Core-owned ids, never foreign text.** Its shape
+  admits any all-lowercase letters-only string up to the 96-byte cap, because that cannot
+  be told from a word; the shape rules still drop token prefixes, digests, hex, mixed
+  tokens and long runs.
+- **Current Core strings that `display()` drops today** (from a scan of the Core,
+  GitHub provider, Bitbucket and updater sources, 1,569 translatable literals and 689
+  multi-word sentences): copy with curly apostrophes, arrows or ellipses (about 45),
+  phrases with `/` such as `owner/repository form` and `workspace/repository`
+  (5), `..\/` in an unsafe-path hint, HTML in a few strings (3 with `<`, 3 with
+  brackets), and guidance that quotes a token prefix (`ghp_`, `github_pat_`). Rewrite
+  these in ASCII without `/` and without prefixes, or keep them out of the sink
+  (HTML and SQL belong in templates and queries, not in failure text).
 
 ### Commit ids
 
@@ -219,7 +256,7 @@ dependency bump), then the release updater (vendored copy).
 
 | Consumer | How |
 | --- | --- |
-| Core (`ran-booster`) | Composer dependency already present: bump it to the release, replace the screeners listed below (provider diagnostics, webhook remediation and activity text with `display()`; logger values with `identifier()`, `commit_id()` and otherwise `strict()`), and run the corpus in Core's tests. |
+| Core (`ran-booster`) | Composer dependency already present: bump it to the release, replace the screeners listed below (provider diagnostics, webhook remediation and activity text with `display()`; logger values with `identifier()`, `commit_id()` and otherwise `strict()`), and run the corpus in Core's tests. Core's real ids (`gh.credential.valid`, `bb.repository.not_found`, `webhook.operation_succeeded`, `ran_booster_storage_transaction_unavailable`, `github-fine-grained-pat-v1`) pass `identifier()`; two current ids that name a hash algorithm (`github-hmac-sha256-v1`, `artifact_sha256`) are dropped by the digest rule, so compare those against their closed list instead. |
 | Branch updater | Composer dependency bump; `AdmittedFailureReason::screen_detail()` becomes a call to `FailureText::strict( $detail, 64 )`; run the corpus. |
 | Release updater | Vendored copy: bump the exact pin in `composer.json`; extend `scripts/sync-updater-support.php` to generate `src/Dependency/FailureText.php` (the class has exactly one namespace occurrence, as the script requires); add the `RAN\WPReleaseUpdater\V1\Dependency\FailureText` entry, with that path, to the class map in `runtime.php`; recompute `runtime-copy.json` `package_revision`; run `composer sync:updater-support` then `check:updater-support`; call `FailureText::strict()` from `ReleaseRejection::detail()`. |
 

@@ -26,42 +26,46 @@ final class FailureText {
 	/** The longest text, in bytes, that is screened. Longer text is dropped, not truncated. */
 	public const MAX_INPUT_LENGTH = 4096;
 
+	/** The longest identifier, in bytes, that `identifier()` accepts. */
+	public const MAX_IDENTIFIER_LENGTH = 96;
+
 	/**
 	 * Shape rules, applied to the whole printable-ASCII text by every mode.
 	 *
 	 * @var array<string, string>
 	 */
 	private const RULES = array(
-		'angle_bracket'        => '#[<>]#',
-		'ampersand'            => '#&#',
-		'bracket_or_brace'     => '#[{}\[\]]#',
-		'pipe'                 => '#\|#',
-		'semicolon'            => '#;#',
-		'backtick'             => '#`#',
-		'equals'               => '#=#',
-		'at_sign'              => '#@#',
-		'percent_escape'       => '#%[0-9a-f]{2}#i',
-		'slash'                => '#/#',
-		'backslash'            => '#\\\\#',
-		'tilde'                => '#~#',
-		'colon_attached'       => '#:(?!\s|\z)#',
-		'question_attached'    => '#\?(?!\s|\z)#',
-		'url_scheme_word'      => '#(?<![a-z0-9])(?:https?|ftps?|sftp|ssh|wss?|ldaps?|smb|javascript|vbscript|mailto)\s*:#i',
-		'wordpress_path_word'  => '#wp-(?:content|config|admin|includes)|\.ht(?:access|passwd)|public_html#i',
-		'session_cookie_name'  => '#wordpress_(?:logged_in|sec|test_cookie)|wp-settings-|phpsessid#i',
-		'private_key_material' => '#private[ _.-]?key|-----begin|ssh-(?:rsa|ed25519)#i',
-		'bearer_basic_token'   => '#(?<![a-z0-9])(?:bearer|basic)\s+(?=(?-i:[A-Za-z0-9+/=._~-]*[0-9A-Z+/=]))[A-Za-z0-9+/=._~-]{4,}#i',
-		'prefix_github'        => '#gh[pousr][_-]|github_pat_#i',
-		'prefix_gitlab'        => '#gl(?:pat|dt|rt|cbt|ptt|soat)-#i',
-		'prefix_slack'         => '#xox[abprs]-|xapp-#i',
-		'prefix_npm'           => '#npm_#i',
-		'prefix_payment'       => '#(?:sk|pk|rk)_(?:live|test)_|sk-#i',
-		'prefix_aws'           => '#AKIA|ASIA#',
-		'prefix_jwt'           => '#eyJ#',
-		'prefix_bitbucket'     => '#AT(?:BB|CTT3|ATT3)#',
-		'prefix_google'        => '#AIza|ya29\.#',
-		'prefix_other_vendor'  => '#shp(?:at|ca|pa|ss)_|dop_v1_#i',
-		'digest_prefix'        => '#(?<![a-z0-9])(?:sha[ _-]?\d|md5|blake2)#i',
+		'angle_bracket'          => '#[<>]#',
+		'ampersand'              => '#&#',
+		'bracket_or_brace'       => '#[{}\[\]]#',
+		'pipe'                   => '#\|#',
+		'semicolon'              => '#;(?!\s|\z)#',
+		'backtick'               => '#`#',
+		'equals'                 => '#=#',
+		'at_sign'                => '#@#',
+		'percent_escape'         => '#%[0-9a-f]{2}#i',
+		'slash'                  => '#/#',
+		'backslash'              => '#\\\\#',
+		'tilde'                  => '#~#',
+		'colon_attached'         => '#:(?!\s|\z)#',
+		'question_attached'      => '#\?(?!\s|\z)#',
+		'url_scheme_word'        => '#(?<![a-z0-9])(?:https?|ftps?|sftp|ssh|wss?|ldaps?|smb|javascript|vbscript|mailto)\s*:#i',
+		'wordpress_path_word'    => '#wp-(?:content|admin|includes)|\.ht(?:access|passwd)|public_html#i',
+		'session_cookie_name'    => '#wordpress_(?:logged_in|sec|test_cookie)|wp-settings-|phpsessid#i',
+		'private_key_material'   => '#private[ _.-]?key|-----begin|ssh-(?:rsa|dss|ed25519)#i',
+		'wordpress_app_password' => '#(?<![A-Za-z0-9])[A-Za-z0-9]{4}(?: [A-Za-z0-9]{4}){5}(?![A-Za-z0-9])#',
+		'bearer_basic_token'     => '#(?<![a-z0-9])(?:bearer|basic)\s+(?=(?-i:[A-Za-z0-9+/=._~-]*[0-9A-Z+/=]))[A-Za-z0-9+/=._~-]{4,}#i',
+		'prefix_github'          => '#gh[pousr][_-]|github_pat_#i',
+		'prefix_gitlab'          => '#gl(?:pat|dt|rt|cbt|ptt|soat)-#i',
+		'prefix_slack'           => '#xox[abprs]-|xapp-#i',
+		'prefix_npm'             => '#npm_#i',
+		'prefix_payment'         => '#(?:sk|pk|rk)_(?:live|test)_|sk-#i',
+		'prefix_aws'             => '#AKIA|ASIA|AROA|AIDA|ABIA|ACCA|AGPA|ANPA|ANVA|APKA#',
+		'prefix_jwt'             => '#eyJ#',
+		'prefix_bitbucket'       => '#AT(?:BB|CTT3|ATT3)#',
+		'prefix_google'          => '#AIza|ya29\.#',
+		'prefix_other_vendor'    => '#shp(?:at|ca|pa|ss)_|dop_v1_#i',
+		'digest_prefix'          => '#(?<![a-z0-9])(?:sha[ _-]?\d|md5|blake2)#i',
 	);
 
 	/**
@@ -74,7 +78,7 @@ final class FailureText {
 	 * @var array<string, string>
 	 */
 	private const PROSE_RULES = array(
-		'credential_password'      => '#(?:passw[o0]rds?|passwds?|pwds?|pass[ _-]?(?:phrase|code)s?)(?![a-z])\s*\S#i',
+		'credential_password'      => '#(?:passw[o0]rds?|passwds?|pwds?|pass(?:phrase|code)s?)(?![a-z])\s*\S#i',
 		'credential_secret'        => '#secrets?(?![a-z])\s*\S#i',
 		'credential_token'         => '#tokens?(?![a-z])\s*\S#i',
 		'credential_api_key'       => '#api[ _.-]?keys?(?![a-z])\s*\S#i',
@@ -83,6 +87,7 @@ final class FailureText {
 		'credential_nonce'         => '#nonces?(?![a-z])\s*\S#i',
 		'credential_cookie'        => '#cookies?(?![a-z])\s*\S#i',
 		'credential_generic'       => '#credentials?(?![a-z])\s*\S#i',
+		'credential_other'         => '#(?:passwort|jwt|pass|pw|auth)(?![a-z])\s*\S|(?:pin|key)(?![a-z])\s+is(?![a-z])|access[ _-]?keys?(?![a-z])\s*\S#i',
 		'bearer_or_basic'          => '#(?<![a-z0-9])(?:bearer|basic)\s+\S#i',
 	);
 
@@ -105,7 +110,7 @@ final class FailureText {
 	 * @param string $text       Untrusted failure text.
 	 * @param int    $max_length Longest result to return, in bytes (1 to MAX_INPUT_LENGTH).
 	 */
-	public static function strict( string $text, int $max_length ): ?string {
+	public static function strict( ?string $text, int $max_length ): ?string {
 		return self::screen( $text, $max_length, true );
 	}
 
@@ -121,7 +126,7 @@ final class FailureText {
 	 * @param string $text       Curated failure text.
 	 * @param int    $max_length Longest result to return, in bytes (1 to MAX_INPUT_LENGTH).
 	 */
-	public static function display( string $text, int $max_length ): ?string {
+	public static function display( ?string $text, int $max_length ): ?string {
 		return self::screen( $text, $max_length, false );
 	}
 
@@ -135,8 +140,15 @@ final class FailureText {
 	 *
 	 * @param string $text Candidate identifier.
 	 */
-	public static function identifier( string $text ): ?string {
-		return 1 === preg_match( '#\A[a-z][a-z0-9_]{0,95}\z#', $text ) && ! self::hostile( $text, false ) ? $text : null;
+	public static function identifier( ?string $text ): ?string {
+		if ( null === $text || strlen( $text ) > self::MAX_IDENTIFIER_LENGTH ) {
+			return null;
+		}
+		try {
+			return self::test( '#\A[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*\z#', $text ) && ! self::hostile( $text, false ) ? $text : null;
+		} catch ( \RuntimeException ) {
+			return null;
+		}
 	}
 
 	/**
@@ -148,27 +160,32 @@ final class FailureText {
 	 *
 	 * @param string $text Candidate commit id.
 	 */
-	public static function commit_id( string $text ): ?string {
-		return 1 === preg_match( '#\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z#', $text ) ? $text : null;
+	public static function commit_id( ?string $text ): ?string {
+		return null !== $text && 1 === preg_match( '#\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z#', $text ) ? $text : null;
 	}
 
 	/**
 	 * Shared screening for `strict()` and `display()`.
 	 *
-	 * @param string $text       Untrusted text.
+	 * @param ?string $text      Untrusted text.
 	 * @param int    $max_length Longest result to return, in bytes.
 	 * @param bool   $prose      Whether the prose credential-word rules apply.
 	 */
-	private static function screen( string $text, int $max_length, bool $prose ): ?string {
-		if ( $max_length < 1 || $max_length > self::MAX_INPUT_LENGTH || strlen( $text ) > self::MAX_INPUT_LENGTH ) {
+	private static function screen( ?string $text, int $max_length, bool $prose ): ?string {
+		if ( null === $text || $max_length < 1 || $max_length > self::MAX_INPUT_LENGTH || strlen( $text ) > self::MAX_INPUT_LENGTH ) {
 			return null;
 		}
-		// Non-ASCII, control, format and invisible characters are never accepted, and are never normalized away.
-		if ( 1 !== preg_match( '#\A[\x20-\x7E]+\z#', $text ) ) { // rule: printable_ascii_only
-			return null;
-		}
-		$text = trim( $text, ' ' );
-		if ( '' === $text || self::hostile( $text, $prose ) ) {
+		try {
+			// Non-ASCII, control, format and invisible characters are never accepted, and are never normalized away.
+			if ( ! self::test( '#\A[\x20-\x7E]+\z#', $text ) ) { // rule: printable_ascii_only
+				return null;
+			}
+			$text = trim( $text, ' ' );
+			if ( '' === $text || self::hostile( $text, $prose ) ) {
+				return null;
+			}
+		} catch ( \RuntimeException ) {
+			// A regular-expression engine failure (backtrack or JIT limit) is never evidence of safety: fail closed.
 			return null;
 		}
 
@@ -198,7 +215,7 @@ final class FailureText {
 	 */
 	private static function matches_table( string $text, bool $prose ): bool {
 		foreach ( $prose ? array_merge( self::RULES, self::PROSE_RULES ) : self::RULES as $pattern ) {
-			if ( 1 === preg_match( $pattern, $text ) ) {
+			if ( self::test( $pattern, $text ) ) {
 				return true;
 			}
 		}
@@ -214,7 +231,7 @@ final class FailureText {
 	 * @param string $text Text already confined to printable ASCII.
 	 */
 	private static function hex_run( string $text ): bool {
-		return 1 === preg_match( '#[0-9a-f]{32}#i', (string) preg_replace( '#[^0-9A-Za-z]+#', '', $text ) );
+		return self::test( '#[0-9a-f]{32}#i', self::strip( '#[^0-9A-Za-z]+#', $text ) );
 	}
 
 	/**
@@ -223,7 +240,7 @@ final class FailureText {
 	 * @param string $text Text already confined to printable ASCII.
 	 */
 	private static function hex_word( string $text ): bool {
-		return 1 === preg_match( '#[0-9a-f]{16}#i', (string) preg_replace( '#[^0-9A-Za-z\s]+#', '', $text ) );
+		return self::test( '#[0-9a-f]{16}#i', self::strip( '#[^0-9A-Za-z\s]+#', $text ) );
 	}
 
 	/**
@@ -234,7 +251,7 @@ final class FailureText {
 	 * @param string $text Text already confined to printable ASCII.
 	 */
 	private static function long_mixed_run( string $text ): bool {
-		return 1 === preg_match( '#(?<![0-9A-Za-z])(?=[0-9A-Za-z]*[0-9A-Z])[0-9A-Za-z]{32}#', (string) preg_replace( '#[^0-9A-Za-z\s]+#', '', $text ) );
+		return self::test( '#(?<![0-9A-Za-z])(?=[0-9A-Za-z]*[0-9A-Z])[0-9A-Za-z]{32}#', self::strip( '#[^0-9A-Za-z\s]+#', $text ) );
 	}
 
 	/**
@@ -243,30 +260,68 @@ final class FailureText {
 	 * @param string $text Text already confined to printable ASCII.
 	 */
 	private static function long_word( string $text ): bool {
-		return 1 === preg_match( '#[0-9A-Za-z]{25}#', $text );
+		return self::test( '#[0-9A-Za-z]{25}#', $text );
 	}
 
 	/**
-	 * Consecutive space-separated chunks that each mix letters and digits, or mix lower then upper case, 24+ characters in all.
+	 * Consecutive space-separated chunks that each mix letters and digits, or mix lower then upper case: 20+ characters across two or more chunks, or 24+ in one.
 	 *
 	 * Words of 32 or more characters belong to long_mixed_run. Catches an encoded secret split by whitespace.
 	 *
 	 * @param string $text Text already confined to printable ASCII.
 	 */
 	private static function dense_chunks( string $text ): bool {
-		$run = 0;
-		foreach ( (array) preg_split( '#\s+#', (string) preg_replace( '#[^0-9A-Za-z\s]+#', '', $text ) ) as $word ) {
-			$word = (string) $word;
-			if ( strlen( $word ) < 32 && ( ( 1 === preg_match( '#\d#', $word ) && 1 === preg_match( '#[A-Za-z]#', $word ) ) || 1 === preg_match( '#[a-z].*[A-Z]#', $word ) ) ) {
+		$run    = 0;
+		$chunks = 0;
+		$words  = preg_split( '#\s+#', self::strip( '#[^0-9A-Za-z\s]+#', $text ) );
+		if ( false === $words ) {
+			throw new \RuntimeException( 'The regular-expression engine failed.' );
+		}
+		foreach ( $words as $word ) {
+			if ( strlen( $word ) < 32 && ( ( self::test( '#\d#', $word ) && self::test( '#[A-Za-z]#', $word ) ) || self::test( '#[a-z].*[A-Z]#', $word ) ) ) {
 				$run += strlen( $word );
-				if ( $run >= 24 ) {
+				++$chunks;
+				if ( $run >= 24 || ( $chunks >= 2 && $run >= 20 ) ) {
 					return true;
 				}
 			} else {
-				$run = 0;
+				$run    = 0;
+				$chunks = 0;
 			}
 		}
 
 		return false;
+	}
+
+	/**
+	 * The single regular-expression test: an engine failure is thrown, never read as no match.
+	 *
+	 * @param string $pattern Pattern.
+	 * @param string $subject Subject.
+	 * @throws \RuntimeException When the engine fails (for example a backtrack or JIT stack limit).
+	 */
+	private static function test( string $pattern, string $subject ): bool {
+		$result = preg_match( $pattern, $subject );
+		if ( false === $result ) {
+			throw new \RuntimeException( 'The regular-expression engine failed.' );
+		}
+
+		return 1 === $result;
+	}
+
+	/**
+	 * Removes every match of $pattern; an engine failure is thrown, never read as an empty result.
+	 *
+	 * @param string $pattern Pattern.
+	 * @param string $subject Subject.
+	 * @throws \RuntimeException When the engine fails.
+	 */
+	private static function strip( string $pattern, string $subject ): string {
+		$result = preg_replace( $pattern, '', $subject );
+		if ( null === $result ) {
+			throw new \RuntimeException( 'The regular-expression engine failed.' );
+		}
+
+		return $result;
 	}
 }

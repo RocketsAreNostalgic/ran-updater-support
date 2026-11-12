@@ -144,9 +144,12 @@ branch updater and the release updater; the policy and rule list are in the
   (six maps of unique label to string; see the file header) without a migration note.
 - Every rule is one row of `FailureText::RULES` or one `// rule:` line in
   `FailureText::hostile()`. Add a rule only with a hostile entry that no other
-  rule rejects: `tests/failure-text-mutation.php` removes each rule and each
-  structural guard from a private copy and fails if the corpus still passes, so a
-  redundant rule has to be removed or justified as the only rejection of an entry.
+  rule rejects: `tests/failure-text-mutation.php` removes each rule, each
+  structural guard and each alternation branch or threshold listed in
+  `tests/fixtures/failure-text-mutants.php` from a private copy and fails if the
+  corpus still passes, so a redundant rule has to be removed or justified as the
+  only rejection of an entry. A mutant no input can distinguish is listed with its
+  reason in `$equivalent`; an unexplained survivor fails the check.
 - Prefer widening a rule to adding a concept. The screener stays one class of
   pure static functions: no state, no WordPress or extension dependency, printable
   ASCII output, no redaction. The three screening modes (`strict`, `display`,
