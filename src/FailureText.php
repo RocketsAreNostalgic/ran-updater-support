@@ -53,7 +53,7 @@ final class FailureText {
 		'wordpress_path_word'    => '#wp-(?:content|admin|includes)|\.ht(?:access|passwd)|public_html#i',
 		'session_cookie_name'    => '#wordpress_(?:logged_in|sec|test_cookie)|wp-settings-|phpsessid#i',
 		'private_key_material'   => '#private[ _.-]?key|-----begin|ssh-(?:rsa|dss|ed25519)#i',
-		'wordpress_app_password' => '#(?<![A-Za-z0-9])[A-Za-z0-9]{4}(?: [A-Za-z0-9]{4}){5}(?![A-Za-z0-9])#',
+		'wordpress_app_password' => '#(?<![A-Za-z0-9])[A-Za-z0-9]{4}(?: +[A-Za-z0-9]{4}){5}(?![A-Za-z0-9])#',
 		'bearer_basic_token'     => '#(?<![a-z0-9])(?:bearer|basic)\s+(?=(?-i:[A-Za-z0-9+/=._~-]*[0-9A-Z+/=]))[A-Za-z0-9+/=._~-]{4,}#i',
 		'prefix_github'          => '#gh[pousr][_-]|github_pat_#i',
 		'prefix_gitlab'          => '#gl(?:pat|dt|rt|cbt|ptt|soat)-#i',
@@ -133,9 +133,9 @@ final class FailureText {
 	/**
 	 * IDENTIFIER: returns the text only when it is a closed snake_case identifier.
 	 *
-	 * Exactly `[a-z][a-z0-9_]{0,95}` and not hostile by any shape rule, so
-	 * diagnostic ids and reason codes such as `ran_booster_storage_transaction_unavailable`
-	 * or `token_expired` pass, while `ghp_abc`, `npm_x`, `sha256_x`, a 16 or more
+	 * Exactly `[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*`, at most MAX_IDENTIFIER_LENGTH bytes, and
+	 * not hostile by any shape rule, so diagnostic ids and reason codes such as
+	 * `ran_booster_storage_transaction_unavailable`, `gh.credential.valid` or `token_expired` pass, while `ghp_abc`, `npm_x`, `sha256_x`, a 16 or more
 	 * digit hex word and a 25 or more character word do not. Never truncated.
 	 *
 	 * @param string $text Candidate identifier.
@@ -264,7 +264,7 @@ final class FailureText {
 	}
 
 	/**
-	 * Consecutive space-separated chunks that each mix letters and digits, or mix lower then upper case: 20+ characters across two or more chunks, or 24+ in one.
+	 * Consecutive space-separated chunks that each mix letters and digits, or mix lower then upper case: 20+ characters across two or more chunks, or 24+ in one; or a single 16 to 23 character word holding a digit, a capital and a lowercase letter.
 	 *
 	 * Words of 32 or more characters belong to long_mixed_run. Catches an encoded secret split by whitespace.
 	 *
@@ -278,6 +278,10 @@ final class FailureText {
 			throw new \RuntimeException( 'The regular-expression engine failed.' );
 		}
 		foreach ( $words as $word ) {
+			// A single 16 to 23 character word that mixes a digit, a capital and a lowercase letter looks random.
+			if ( strlen( $word ) >= 16 && strlen( $word ) <= 23 && self::test( '#\d#', $word ) && self::test( '#[A-Z]#', $word ) && self::test( '#[a-z]#', $word ) ) {
+				return true;
+			}
 			if ( strlen( $word ) < 32 && ( ( self::test( '#\d#', $word ) && self::test( '#[A-Za-z]#', $word ) ) || self::test( '#[a-z].*[A-Z]#', $word ) ) ) {
 				$run += strlen( $word );
 				++$chunks;

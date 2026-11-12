@@ -241,9 +241,13 @@ content the package does not control needs `strict()`.
   else is a type error under `strict_types`.
 - **Not caught.** Bare hostnames, IP addresses and file names that contain none of
   `/ : @` (`db.internal`, `192.168.0.1`, `wp-config.php`) are not credentials or paths and
-  pass; the shape rules catch paths and URLs by their separators, not by name. A random
-  token of lowercase letters only, or any token shorter than the thresholds with no
-  distinctive prefix, cannot be told from words. A re-encoding the rules do not name
+  pass; the shape rules catch paths and URLs by their separators, not by name. Measured residual (2,000 random tokens per cell, `strict()`): a random token of
+  mixed case with digits is caught from 16 characters (94 to 98 percent) and by 24
+  characters always, but under 16 characters passes every time; a random token of
+  lowercase letters and digits with no capital passes up to 23 characters, and one of
+  lowercase letters only passes at any length below the 25 character run limit and, when
+  split by separators into short parts, at any length. Nothing can tell those from words
+  or ids without a distinctive prefix. A re-encoding the rules do not name
   is not detected.
 - **`identifier()` is only for closed, Core-owned ids, never foreign text.** Its shape
   admits any all-lowercase letters-only string up to the 96-byte cap, because that cannot
@@ -296,18 +300,14 @@ rule in turn from a private copy and fails if the corpus does not notice.
 ### Adopting the screener
 
 Version impact: additive, a `feat` with no change to an existing class, so no
-consumer changes until it adopts. Under this package's beta versioning each Release
-Please release bumps the beta number from `1.0.0-beta.4`. The path-failure-reasons
-change (#55) is already on `main` and will release as `1.0.0-beta.5`. This change
-rides the same release proposal, so `1.0.0-beta.5` carries both, if it merges before
-that proposal is merged; if it merges after, it is `1.0.0-beta.6`.
+consumer changes until it adopts. Release Please versions it like any other `feat`.
 
 Adoption order: release this package, then Core and the branch updater (Composer
 dependency bump), then the release updater (vendored copy).
 
 | Consumer | How |
 | --- | --- |
-| Core (`ran-booster`) | Composer dependency already present: bump it to the release, replace the screeners listed below (provider diagnostics, webhook remediation and activity text with `display()`; logger values with `identifier()`, `commit_id()` and otherwise `strict()`), and run the corpus in Core's tests. Core's real ids (`gh.credential.valid`, `bb.repository.not_found`, `webhook.operation_succeeded`, `ran_booster_storage_transaction_unavailable`, `github-fine-grained-pat-v1`) pass `identifier()`; two current ids that name a hash algorithm (`github-hmac-sha256-v1`, `artifact_sha256`) are dropped by the digest rule, so compare those against their closed list instead. |
+| Core (`ran-booster`) | Composer dependency already present: bump it to the release, replace the screeners listed below (provider diagnostics, webhook remediation and activity text with `display()`; logger values with `identifier()`, `commit_id()` and otherwise `strict()`), and run the corpus in Core's tests. Before Core adopts `display()` in place of `InvalidCredentialInput::assert_safe_text` and the other constructors, these Core and provider strings must be reworded in ASCII, or their sink changed, because the constructor would otherwise throw on the provider's own messages: the three `CredentialPolicy` messages that quote `ghp_` and `github_pat_`; the `DeploymentOutcomeMessage` unsafe-path hint that contains `../`; the `owner/repository` and `workspace/repository` strings; and the 18 Core strings with curly apostrophes, em dashes or arrows. Core's real ids (`gh.credential.valid`, `bb.repository.not_found`, `webhook.operation_succeeded`, `ran_booster_storage_transaction_unavailable`, `github-fine-grained-pat-v1`) pass `identifier()`; two current ids that name a hash algorithm (`github-hmac-sha256-v1`, `artifact_sha256`) are dropped by the digest rule, so compare those against their closed list instead. |
 | Branch updater | Composer dependency bump; `AdmittedFailureReason::screen_detail()` becomes a call to `FailureText::strict( $detail, 64 )`; run the corpus. |
 | Release updater | Vendored copy: bump the exact pin in `composer.json`; extend `scripts/sync-updater-support.php` to generate `src/Dependency/FailureText.php` (the class has exactly one namespace occurrence, as the script requires); add the `RAN\WPReleaseUpdater\V1\Dependency\FailureText` entry, with that path, to the class map in `runtime.php`; recompute `runtime-copy.json` `package_revision`; run `composer sync:updater-support` then `check:updater-support`; call `FailureText::strict()` from `ReleaseRejection::detail()`. |
 
