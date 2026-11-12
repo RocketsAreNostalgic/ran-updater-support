@@ -26,7 +26,9 @@ release.
 | `composer standards` | Shared PHPCS/WPCS/PHPCompatibility and RAN-owned method rules |
 | `composer standards:fix` | PHPCBF with the same rules and source paths |
 | `composer analyze` | Blocking PHPStan level 8 over isolated production and all maintained PHP |
-| `composer test` | Archive-safety, naming-enforcement and release-workflow contracts |
+| `composer test` | Archive-safety, failure-text, naming-enforcement and release-workflow contracts |
+| `composer test:failure-text` | Shared failure-text corpus and deterministic property tests |
+| `composer test:failure-text-mutation` | Removes each screener rule in turn; the corpus must notice |
 | `composer test:standards` | Positive/negative owned-method checks through the local ruleset |
 
 `composer check` includes syntax, standards, analysis and test checks, plus
@@ -152,3 +154,40 @@ known codes and would treat any new non-null value as a pass. New reasons belong
 in sibling methods. `tests/contract.php` pins the legacy rules as frozen
 reference implementations and compares them with the current methods over a
 generated corpus.
+
+## Failure-text screener and its corpus (#57)
+
+`FailureText` is the single source of failure-text screening for Core, the
+branch updater and the release updater; the policy and rule list are in the
+[README](README.md#failure-text). Changing it is a cross-package contract change.
+
+- The hostile and benign corpus in `tests/fixtures/failure-text-corpus.php` is
+  the contract. A string found passing any screener goes into `hostile` first,
+  then the rule is fixed; a string that must keep passing goes into `benign`.
+  Keep the file ASCII (use escapes) and use synthetic shapes, never a real
+  credential. Consumers' tests load this file, so do not change its shape
+  (six maps of unique label to string; see the file header) without a migration note.
+- Every rule is one row of `FailureText::RULES` or one `// rule:` line in
+  `FailureText::hostile()`. Add a rule only with a hostile entry that no other
+  rule rejects: `tests/failure-text-mutation.php` removes each rule, each
+  structural guard and each alternation branch or threshold listed in
+  `tests/fixtures/failure-text-mutants.php` from a private copy and fails if the
+  corpus still passes, so a redundant rule has to be removed or justified as the
+  only rejection of an entry. A mutant no input can distinguish is listed with its
+  reason in `$equivalent`; an unexplained survivor fails the check.
+- Prefer widening a rule to adding a concept. The screener stays one class of
+  pure static functions: no state, no WordPress or extension dependency, printable
+  ASCII output, no redaction. The three screening modes (`strict`, `display`,
+  `identifier`) differ only in the prose credential-word rules and the identifier
+  shape; a shape rule belongs in the shared table so every mode applies it, and a
+  prose-word rule belongs in `PROSE_RULES`. Keep exactly one occurrence of the
+  namespace string in the file: the release updater generates a namespace-rewritten
+  vendored copy and refuses any other shape. Avoid end-anchored patterns, so a
+  bounded prefix of accepted text is always itself acceptable (the property tests
+  check this).
+- False positives are accepted, false negatives are not. When a benign string is
+  dropped, record it in the README list rather than loosening a rule unless a
+  consumer cannot work around it with its closed reason code.
+- Run `composer test:failure-text` and `composer test:failure-text-mutation`, or
+  `composer check`, before committing.
+
