@@ -35,6 +35,8 @@
     "validate:strict": "composer validate --strict --no-check-publish",
     "test:standards": "node --test tests/owned-methods.test.mjs",
     "test:contract": "php tests/contract.php",
+    "test:failure-text": "php tests/failure-text.php",
+    "test:failure-text-mutation": "php tests/failure-text-mutation.php",
     "standards": "phpcs --standard=.phpcs.xml",
     "standards:fix": "phpcbf --standard=.phpcs.xml --report=summary",
     "analyze": [
@@ -46,6 +48,8 @@
     "test": [
       "@test:analysis-coverage",
       "@test:contract",
+      "@test:failure-text",
+      "@test:failure-text-mutation",
       "@test:standards",
       "@test:release-control"
     ],

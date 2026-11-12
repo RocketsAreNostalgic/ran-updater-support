@@ -26,7 +26,9 @@ release.
 | `composer standards` | Shared PHPCS/WPCS/PHPCompatibility and RAN-owned method rules |
 | `composer standards:fix` | PHPCBF with the same rules and source paths |
 | `composer analyze` | Blocking PHPStan level 8 over isolated production and all maintained PHP |
-| `composer test` | Archive-safety, naming-enforcement and release-workflow contracts |
+| `composer test` | Archive-safety, failure-text, naming-enforcement and release-workflow contracts |
+| `composer test:failure-text` | Shared failure-text corpus and deterministic property tests |
+| `composer test:failure-text-mutation` | Removes each screener rule in turn; the corpus must notice |
 | `composer test:standards` | Positive/negative owned-method checks through the local ruleset |
 
 `composer check` includes syntax, standards, analysis and test checks, plus
@@ -127,3 +129,33 @@ their current local annotations. Real-checker tests demonstrate actual blanket
 bypasses, precise annotation acceptance, the immediate outside diagnostic, new
 persistent annotation rejection and future declarations inside the three allowance files.
 This change adds no source exemptions and changes no executable PHP or dependencies.
+
+## Failure-text screener and its corpus (#57)
+
+`FailureText` is the single source of failure-text screening for Core, the
+branch updater and the release updater; the policy and rule list are in the
+[README](README.md#failure-text). Changing it is a cross-package contract change.
+
+- The hostile and benign corpus in `tests/fixtures/failure-text-corpus.php` is
+  the contract. A string found passing any screener goes into `hostile` first,
+  then the rule is fixed; a string that must keep passing goes into `benign`.
+  Keep the file ASCII (use escapes) and use synthetic shapes, never a real
+  credential. Consumers' tests load this file, so do not change its shape
+  (`hostile` and `benign` maps of unique label to string) without a migration note.
+- Every rule is one row of `FailureText::RULES` or one `// rule:` line in
+  `FailureText::hostile()`. Add a rule only with a hostile entry that no other
+  rule rejects: `tests/failure-text-mutation.php` removes each rule and each
+  structural guard from a private copy and fails if the corpus still passes, so a
+  redundant rule has to be removed or justified as the only rejection of an entry.
+- Prefer widening a rule to adding a concept. The screener stays one class of
+  pure static functions: no state, no WordPress or extension dependency, printable
+  ASCII output, no redaction, no charset modes. Keep exactly one occurrence of the
+  namespace string in the file: the release updater generates a namespace-rewritten
+  vendored copy and refuses any other shape. Avoid end-anchored patterns, so a
+  bounded prefix of accepted text is always itself acceptable (the property tests
+  check this).
+- False positives are accepted, false negatives are not. When a benign string is
+  dropped, record it in the README list rather than loosening a rule unless a
+  consumer cannot work around it with its closed reason code.
+- Run `composer test:failure-text` and `composer test:failure-text-mutation`, or
+  `composer check`, before committing.
