@@ -404,6 +404,17 @@ foreach ( $repository_inputs as $input ) {
 		$fail( 'RepositoryRelativePath differs from the legacy accept/reject rule' );
 	}
 }
+foreach ( array( 'free text with /secret/path', '', 'PATH_EMPTY', "path_empty\n" ) as $unknown_reason ) {
+	try {
+		new InvalidRepositoryPathException( $unknown_reason );
+		$fail( 'an unknown reason was accepted by the exception constructor' );
+	} catch ( InvalidArgumentException $error ) {
+		if ( $error instanceof InvalidRepositoryPathException || str_contains( $error->getMessage(), 'secret' ) ) {
+			$fail( 'an unknown reason produced the wrong exception or echoed its text' );
+		}
+	}
+}
+
 if ( count( $repository_inputs ) < 60000 || count( $seen_repository_reasons ) !== count( InvalidRepositoryPathException::REASONS ) ) {
 	$fail( 'repository path corpus is too small or misses a reason: ' . implode( ',', array_diff( InvalidRepositoryPathException::REASONS, array_keys( $seen_repository_reasons ) ) ) );
 }

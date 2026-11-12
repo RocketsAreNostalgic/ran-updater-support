@@ -33,6 +33,9 @@ final class InvalidRepositoryPathException extends InvalidArgumentException {
 
 	/** @param string $reason One of REASONS. */
 	public function __construct( private readonly string $reason ) {
+		if ( ! in_array( $reason, self::REASONS, true ) ) {
+			throw new \InvalidArgumentException( 'The repository-relative path failure reason is not recognised.' );
+		}
 		parent::__construct( self::MESSAGE );
 	}
 
