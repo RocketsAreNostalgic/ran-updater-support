@@ -17,11 +17,17 @@ use RAN\UpdaterSupport\V1\FailureText;
 		throw new RuntimeException( 'failure-text: ' . $message );
 	};
 
-	/** @var array{hostile: array<string, string>, benign: array<string, string>} $corpus */
-	$corpus  = require __DIR__ . '/fixtures/failure-text-corpus.php';
-	$bounds  = array( 1, 2, 8, 24, 64, 120, 255, 1024, FailureText::MAX_INPUT_LENGTH );
-	$hostile = $corpus['hostile'];
-	$benign  = $corpus['benign'];
+	/** @var array{hostile: array<string, string>, strict_only: array<string, string>, display_only: array<string, string>, benign: array<string, string>, identifiers: array<string, string>, not_identifiers: array<string, string>} $corpus */
+	$corpus       = require __DIR__ . '/fixtures/failure-text-corpus.php';
+	$bounds       = array( 1, 2, 8, 24, 64, 120, 255, 1024, FailureText::MAX_INPUT_LENGTH );
+	$hostile      = $corpus['hostile'];
+	$strict_only  = $corpus['strict_only'];
+	$display_only = $corpus['display_only'];
+	$benign       = $corpus['benign'];
+	$modes        = array(
+		'strict'  => static fn( string $text, int $bound ): ?string => FailureText::strict( $text, $bound ),
+		'display' => static fn( string $text, int $bound ): ?string => FailureText::display( $text, $bound ),
+	);
 
 	// The release updater vendors a namespace-rewritten copy, which requires exactly one namespace occurrence,
 	// and the class must stay free of any WordPress dependency.
@@ -31,47 +37,86 @@ use RAN\UpdaterSupport\V1\FailureText;
 		$fail( 'the screener source is not a single-namespace, WordPress-free file' );
 	}
 
-	if ( array() !== array_intersect( $hostile, $benign ) ) {
-		$fail( 'a string is both hostile and benign' );
-	}
-
-	// Hostile corpus: dropped whole at every bound, because the whole text is screened before it is bounded.
-	foreach ( $hostile as $label => $text ) {
-		foreach ( $bounds as $bound ) {
-			if ( null !== FailureText::screen( $text, $bound ) ) {
-				$fail( "hostile text was returned: {$label} (bound {$bound})" );
+	foreach ( array( 'hostile', 'strict_only', 'display_only', 'benign' ) as $name ) {
+		foreach ( array( 'hostile', 'strict_only', 'display_only', 'benign' ) as $other ) {
+			if ( $name < $other && array() !== array_intersect( $corpus[ $name ], $corpus[ $other ] ) ) {
+				$fail( "a string is in both {$name} and {$other}" );
 			}
 		}
 	}
 
-	// Benign corpus: returned verbatim, and as an exact bounded prefix at smaller bounds.
-	foreach ( $benign as $label => $text ) {
-		if ( FailureText::screen( $text, FailureText::MAX_INPUT_LENGTH ) !== $text ) {
-			$fail( "benign text was dropped: {$label}" );
+	// Hostile corpus: dropped whole at every bound, because the whole text is screened before it is bounded.
+	foreach ( $modes as $mode => $screen ) {
+		foreach ( $hostile as $label => $text ) {
+			foreach ( $bounds as $bound ) {
+				if ( null !== $screen( $text, $bound ) ) {
+					$fail( "hostile text was returned by {$mode}: {$label} (bound {$bound})" );
+				}
+			}
 		}
+	}
+
+	// Prose: dropped by STRICT only. DISPLAY returns curated sentences and prose mentions verbatim.
+	foreach ( $strict_only as $label => $text ) {
 		foreach ( $bounds as $bound ) {
-			$expected = rtrim( substr( $text, 0, $bound ) );
-			if ( FailureText::screen( $text, $bound ) !== $expected ) {
-				$fail( "benign text was not an exact prefix: {$label} (bound {$bound})" );
+			if ( null !== FailureText::strict( $text, $bound ) ) {
+				$fail( "strict returned a credential-word text: {$label} (bound {$bound})" );
+			}
+		}
+		if ( FailureText::display( $text, FailureText::MAX_INPUT_LENGTH ) !== $text ) {
+			$fail( "display dropped a text that only strict drops: {$label}" );
+		}
+	}
+	foreach ( $display_only as $label => $text ) {
+		if ( FailureText::display( $text, FailureText::MAX_INPUT_LENGTH ) !== $text || null !== FailureText::strict( $text, FailureText::MAX_INPUT_LENGTH ) ) {
+			$fail( "a curated sentence is not display-only: {$label}" );
+		}
+	}
+
+	// Identifiers: exact closed snake_case ids pass; everything else, including hostile shapes in id form, drops.
+	foreach ( $corpus['identifiers'] as $label => $text ) {
+		if ( FailureText::identifier( $text ) !== $text ) {
+			$fail( "identifier was dropped: {$label}" );
+		}
+	}
+	foreach ( $corpus['not_identifiers'] as $label => $text ) {
+		if ( null !== FailureText::identifier( $text ) ) {
+			$fail( "identifier accepted: {$label}" );
+		}
+	}
+
+	// Benign corpus: returned verbatim, and as an exact bounded prefix at smaller bounds.
+	foreach ( $modes as $mode => $screen ) {
+		foreach ( $benign as $label => $text ) {
+			if ( $screen( $text, FailureText::MAX_INPUT_LENGTH ) !== $text ) {
+				$fail( "benign text was dropped by {$mode}: {$label}" );
+			}
+			foreach ( $bounds as $bound ) {
+				$expected = rtrim( substr( $text, 0, $bound ) );
+				if ( $screen( $text, $bound ) !== $expected ) {
+					$fail( "benign text was not an exact prefix in {$mode}: {$label} (bound {$bound})" );
+				}
 			}
 		}
 	}
 
 	// Caller misuse fails closed.
-	foreach ( array( 0, -1, FailureText::MAX_INPUT_LENGTH + 1, PHP_INT_MAX, PHP_INT_MIN ) as $bound ) {
-		if ( null !== FailureText::screen( 'Plugin Name', $bound ) ) {
-			$fail( "an invalid bound was accepted: {$bound}" );
+	foreach ( $modes as $mode => $screen ) {
+		foreach ( array( 0, -1, FailureText::MAX_INPUT_LENGTH + 1, PHP_INT_MAX, PHP_INT_MIN ) as $bound ) {
+			if ( null !== $screen( 'Plugin Name', $bound ) ) {
+				$fail( "an invalid bound was accepted by {$mode}: {$bound}" );
+			}
 		}
 	}
 
 	// The validating idiom: equality shows the text was safe, within the bound and untrimmed.
-	if ( FailureText::screen( 'Plugin Name', 11 ) !== 'Plugin Name' || FailureText::screen( 'Plugin Name', 10 ) === 'Plugin Name' ) {
+	if ( FailureText::strict( 'Plugin Name', 11 ) !== 'Plugin Name' || FailureText::strict( 'Plugin Name', 10 ) === 'Plugin Name' ) {
 		$fail( 'the validating idiom does not distinguish a bounded result' );
 	}
-	if ( FailureText::screen( '  Plugin Name  ', 40 ) !== 'Plugin Name' ) {
+	if ( FailureText::strict( '  Plugin Name  ', 40 ) !== 'Plugin Name' ) {
 		$fail( 'surrounding spaces are not trimmed' );
 	}
-	if ( 'Plugin' !== FailureText::screen( 'Plugin Name', 7 ) ) {
+	if ( 'Plugin' !== FailureText::strict( 'Plugin Name', 7 ) ) {
 		$fail( 'a bounded result keeps a trailing space' );
 	}
 
@@ -79,8 +124,8 @@ use RAN\UpdaterSupport\V1\FailureText;
 	$sha1   = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
 	$sha256 = hash( 'sha256', 'x' );
 	foreach ( array( $sha1, $sha256 ) as $id ) {
-		if ( FailureText::commit_id( $id ) !== $id || null !== FailureText::screen( $id, 255 ) ) {
-			$fail( 'a commit id is not opt-in only' );
+		if ( FailureText::commit_id( $id ) !== $id || null !== FailureText::strict( $id, 255 ) || null !== FailureText::display( $id, 255 ) ) {
+			$fail( 'a commit id is not opt-in only (strict and display must drop it)' );
 		}
 	}
 	$not_ids = array(
@@ -126,12 +171,18 @@ use RAN\UpdaterSupport\V1\FailureText;
 	};
 
 	// Property 1: a hostile shape set off by spaces from any surroundings is always dropped, at any bound.
-	$hostile_values = array_values( array_filter( $hostile, static fn( string $value ): bool => '' !== trim( $value ) ) );
-	for ( $case = 0; $case < 3000; ++$case ) {
-		$text  = $pad() . ' ' . $hostile_values[ $next( count( $hostile_values ) ) ] . ' ' . $pad();
-		$bound = $bounds[ $next( count( $bounds ) ) ];
-		if ( null !== FailureText::screen( $text, $bound ) ) {
-			$fail( 'a hostile shape inside other text was returned' );
+	$non_empty = static fn( array $values ): array => array_values( array_filter( $values, static fn( string $value ): bool => '' !== trim( $value ) ) );
+	$injected  = array(
+		'strict'  => $non_empty( array_merge( $hostile, $strict_only ) ),
+		'display' => $non_empty( $hostile ),
+	);
+	foreach ( $modes as $mode => $screen ) {
+		for ( $case = 0; $case < 3000; ++$case ) {
+			$text  = $pad() . ' ' . $injected[ $mode ][ $next( count( $injected[ $mode ] ) ) ] . ' ' . $pad();
+			$bound = $bounds[ $next( count( $bounds ) ) ];
+			if ( null !== $screen( $text, $bound ) ) {
+				$fail( "a hostile shape inside other text was returned by {$mode}" );
+			}
 		}
 	}
 
@@ -149,10 +200,14 @@ use RAN\UpdaterSupport\V1\FailureText;
 			}
 			$text = implode( ' ', $parts );
 		}
-		$bound  = 1 + $next( 160 );
-		$result = FailureText::screen( $text, $bound );
-		if ( FailureText::screen( $text, $bound ) !== $result ) {
+		$bound   = 1 + $next( 160 );
+		$result  = FailureText::strict( $text, $bound );
+		$display = FailureText::display( $text, $bound );
+		if ( FailureText::strict( $text, $bound ) !== $result || FailureText::display( $text, $bound ) !== $display ) {
 			$fail( 'the screen is not deterministic' );
+		}
+		if ( null !== $result && $display !== $result ) {
+			$fail( 'strict accepted text that display dropped' );
 		}
 		if ( null === $result ) {
 			continue;
@@ -165,7 +220,7 @@ use RAN\UpdaterSupport\V1\FailureText;
 		if ( ! str_starts_with( $trimmed, $result ) ) {
 			$fail( 'the result is not a prefix of the screened text' );
 		}
-		if ( FailureText::screen( $result, $bound ) !== $result ) {
+		if ( FailureText::strict( $result, $bound ) !== $result ) {
 			$fail( 'the screen is not idempotent' );
 		}
 		if ( 1 === preg_match( '#[<>&{}\[\]|;`=@/\\\\~]|%[0-9a-fA-F]{2}|:\S|\?\S#', $result ) ) {
@@ -183,7 +238,7 @@ use RAN\UpdaterSupport\V1\FailureText;
 	foreach ( $benign as $label => $text ) {
 		$limit = strlen( $text ) + 2;
 		for ( $bound = 1; $bound <= $limit; ++$bound ) {
-			$result = FailureText::screen( $text, $bound );
+			$result = FailureText::strict( $text, $bound );
 			if ( null === $result || ! str_starts_with( $text, $result ) || strlen( $result ) > $bound ) {
 				$fail( "bounding changed acceptance: {$label} (bound {$bound})" );
 			}

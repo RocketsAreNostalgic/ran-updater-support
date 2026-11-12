@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace RAN\UpdaterSupport\V1;
 
 /**
- * Decides whether untrusted failure text may be shown or recorded.
+ * Decides whether failure text may be shown or recorded, in explicit modes.
  *
  * One policy, implemented once, for Core and both updaters. The whole text is
  * screened first and only then bounded. A text that matches any rule is dropped
@@ -27,32 +27,54 @@ final class FailureText {
 	public const MAX_INPUT_LENGTH = 4096;
 
 	/**
-	 * Single-shape rules, applied to the whole printable-ASCII text. Credential
+	 * Shape rules, applied to the whole printable-ASCII text by every mode.
+	 *
+	 * @var array<string, string>
+	 */
+	private const RULES = array(
+		'angle_bracket'        => '#[<>]#',
+		'ampersand'            => '#&#',
+		'bracket_or_brace'     => '#[{}\[\]]#',
+		'pipe'                 => '#\|#',
+		'semicolon'            => '#;#',
+		'backtick'             => '#`#',
+		'equals'               => '#=#',
+		'at_sign'              => '#@#',
+		'percent_escape'       => '#%[0-9a-f]{2}#i',
+		'slash'                => '#/#',
+		'backslash'            => '#\\\\#',
+		'tilde'                => '#~#',
+		'colon_attached'       => '#:(?!\s|\z)#',
+		'question_attached'    => '#\?(?!\s|\z)#',
+		'url_scheme_word'      => '#(?<![a-z0-9])(?:https?|ftps?|sftp|ssh|wss?|ldaps?|smb|javascript|vbscript|mailto)\s*:#i',
+		'wordpress_path_word'  => '#wp-(?:content|config|admin|includes)|\.ht(?:access|passwd)|public_html#i',
+		'session_cookie_name'  => '#wordpress_(?:logged_in|sec|test_cookie)|wp-settings-|phpsessid#i',
+		'private_key_material' => '#private[ _.-]?key|-----begin|ssh-(?:rsa|ed25519)#i',
+		'bearer_basic_token'   => '#(?<![a-z0-9])(?:bearer|basic)\s+(?=(?-i:[A-Za-z0-9+/=._~-]*[0-9A-Z+/=]))[A-Za-z0-9+/=._~-]{4,}#i',
+		'prefix_github'        => '#gh[pousr][_-]|github_pat_#i',
+		'prefix_gitlab'        => '#gl(?:pat|dt|rt|cbt|ptt|soat)-#i',
+		'prefix_slack'         => '#xox[abprs]-|xapp-#i',
+		'prefix_npm'           => '#npm_#i',
+		'prefix_payment'       => '#(?:sk|pk|rk)_(?:live|test)_|sk-#i',
+		'prefix_aws'           => '#AKIA|ASIA#',
+		'prefix_jwt'           => '#eyJ#',
+		'prefix_bitbucket'     => '#AT(?:BB|CTT3|ATT3)#',
+		'prefix_google'        => '#AIza|ya29\.#',
+		'prefix_other_vendor'  => '#shp(?:at|ca|pa|ss)_|dop_v1_#i',
+		'digest_prefix'        => '#(?<![a-z0-9])(?:sha[ _-]?\d|md5|blake2)#i',
+	);
+
+	/**
+	 * Prose rules, applied only by `strict()`: a credential word followed by any value.
+	 * Curated English sentences that merely mention a token or password are not
+	 * credentials, so `display()` and `identifier()` do not apply these. Credential
 	 * words match inside a longer word (`usertoken`) and across an underscore
 	 * (`client_secret`), but not before a letter (`tokenizer`).
 	 *
 	 * @var array<string, string>
 	 */
-	private const RULES = array(
-		'angle_bracket'            => '#[<>]#',
-		'ampersand'                => '#&#',
-		'bracket_or_brace'         => '#[{}\[\]]#',
-		'pipe'                     => '#\|#',
-		'semicolon'                => '#;#',
-		'backtick'                 => '#`#',
-		'equals'                   => '#=#',
-		'at_sign'                  => '#@#',
-		'percent_escape'           => '#%[0-9a-f]{2}#i',
-		'slash'                    => '#/#',
-		'backslash'                => '#\\\\#',
-		'tilde'                    => '#~#',
-		'colon_attached'           => '#:(?!\s|\z)#',
-		'question_attached'        => '#\?(?!\s|\z)#',
-		'url_scheme_word'          => '#(?<![a-z0-9])(?:https?|ftps?|sftp|ssh|wss?|ldaps?|smb|javascript|vbscript|mailto)\s*:#i',
-		'wordpress_path_word'      => '#wp-(?:content|config|admin|includes)|\.ht(?:access|passwd)|public_html#i',
-		'session_cookie_name'      => '#wordpress_(?:logged_in|sec|test_cookie)|wp-settings-|phpsessid#i',
-		'private_key_material'     => '#private[ _.-]?key|-----begin|ssh-(?:rsa|ed25519)#i',
-		'credential_password'      => '#(?:passw[o0]rds?|passwd|pwd|pass[ _-]?(?:phrase|code))(?![a-z])\s*\S#i',
+	private const PROSE_RULES = array(
+		'credential_password'      => '#(?:passw[o0]rds?|passwds?|pwds?|pass[ _-]?(?:phrase|code)s?)(?![a-z])\s*\S#i',
 		'credential_secret'        => '#secrets?(?![a-z])\s*\S#i',
 		'credential_token'         => '#tokens?(?![a-z])\s*\S#i',
 		'credential_api_key'       => '#api[ _.-]?keys?(?![a-z])\s*\S#i',
@@ -62,21 +84,14 @@ final class FailureText {
 		'credential_cookie'        => '#cookies?(?![a-z])\s*\S#i',
 		'credential_generic'       => '#credentials?(?![a-z])\s*\S#i',
 		'bearer_or_basic'          => '#(?<![a-z0-9])(?:bearer|basic)\s+\S#i',
-		'prefix_github'            => '#gh[pousr][_-]|github_pat_#i',
-		'prefix_gitlab'            => '#gl(?:pat|dt|rt|cbt|ptt|soat)-#i',
-		'prefix_slack'             => '#xox[abprs]-|xapp-#i',
-		'prefix_npm'               => '#(?<![a-z0-9])npm_#i',
-		'prefix_payment'           => '#(?<![a-z0-9])(?:(?:sk|pk|rk)_(?:live|test)_|sk-)#i',
-		'prefix_aws'               => '#(?<![A-Za-z0-9])(?:AKIA|ASIA)[A-Z0-9]#',
-		'prefix_jwt'               => '#(?<![A-Za-z0-9])eyJ#',
-		'prefix_bitbucket'         => '#(?<![A-Za-z0-9])AT(?:BB|CTT3|ATT3)#',
-		'prefix_google'            => '#(?<![A-Za-z0-9])AIza|(?<![a-z0-9])ya29\.#',
-		'prefix_other_vendor'      => '#shp(?:at|ca|pa|ss)_|dop_v1_#i',
-		'digest_prefix'            => '#(?<![a-z0-9])(?:sha[ _-]?\d|md5|blake2)#i',
 	);
 
 	/**
-	 * Returns the screened text, bounded to $max_length bytes, or null.
+	 * STRICT: screens untrusted free-text detail from a foreign package.
+	 *
+	 * Applies every shape rule and the prose credential-word rules, so any
+	 * credential word followed by text drops the whole text. Use for updater
+	 * rejection and failure detail, with a small bound.
 	 *
 	 * Null means drop the whole text: it was empty, longer than MAX_INPUT_LENGTH,
 	 * not printable ASCII, matched a rule, or $max_length was outside 1 to
@@ -85,31 +100,49 @@ final class FailureText {
 	 * trimmed; nothing else is changed.
 	 *
 	 * A validating sink that must reject over-long text instead of truncating it
-	 * compares: `FailureText::screen( $text, $max ) === $text`.
+	 * compares: `FailureText::strict( $text, $max ) === $text`.
 	 *
 	 * @param string $text       Untrusted failure text.
 	 * @param int    $max_length Longest result to return, in bytes (1 to MAX_INPUT_LENGTH).
 	 */
-	public static function screen( string $text, int $max_length ): ?string {
-		if ( $max_length < 1 || $max_length > self::MAX_INPUT_LENGTH || strlen( $text ) > self::MAX_INPUT_LENGTH ) {
-			return null;
-		}
-		// Non-ASCII, control, format and invisible characters are never accepted, and are never normalized away.
-		if ( 1 !== preg_match( '#\A[\x20-\x7E]+\z#', $text ) ) { // rule: printable_ascii_only
-			return null;
-		}
-		$text = trim( $text, ' ' );
-		if ( '' === $text || self::hostile( $text ) ) {
-			return null;
-		}
+	public static function strict( string $text, int $max_length ): ?string {
+		return self::screen( $text, $max_length, true );
+	}
 
-		return rtrim( substr( $text, 0, $max_length ) );
+	/**
+	 * DISPLAY: screens curated sentences that Core shows, by shape only.
+	 *
+	 * Identical to `strict()` except that the prose credential-word rules are not
+	 * applied, so `Check the token permissions and organisation approval.` passes.
+	 * Tokens, userinfo, URLs, query credentials, digests, hex and base64 runs,
+	 * paths, markup and control, format and non-ASCII characters are still
+	 * dropped. Full sentences with spaces and punctuation are allowed.
+	 *
+	 * @param string $text       Curated failure text.
+	 * @param int    $max_length Longest result to return, in bytes (1 to MAX_INPUT_LENGTH).
+	 */
+	public static function display( string $text, int $max_length ): ?string {
+		return self::screen( $text, $max_length, false );
+	}
+
+	/**
+	 * IDENTIFIER: returns the text only when it is a closed snake_case identifier.
+	 *
+	 * Exactly `[a-z][a-z0-9_]{0,95}` and not hostile by any shape rule, so
+	 * diagnostic ids and reason codes such as `ran_booster_storage_transaction_unavailable`
+	 * or `token_expired` pass, while `ghp_abc`, `npm_x`, `sha256_x`, a 16 or more
+	 * digit hex word and a 25 or more character word do not. Never truncated.
+	 *
+	 * @param string $text Candidate identifier.
+	 */
+	public static function identifier( string $text ): ?string {
+		return 1 === preg_match( '#\A[a-z][a-z0-9_]{0,95}\z#', $text ) && ! self::hostile( $text, false ) ? $text : null;
 	}
 
 	/**
 	 * Returns the text only when it is exactly a lowercase 40- or 64-digit hex commit id.
 	 *
-	 * This is the narrow opt-in for resolved commit ids, which `screen()` always
+	 * This is the narrow opt-in for resolved commit ids, which `strict()` and `display()` always
 	 * drops because they have the shape of a digest. Nothing else is allowed: no
 	 * other length, case, surrounding text or whitespace.
 	 *
@@ -120,12 +153,36 @@ final class FailureText {
 	}
 
 	/**
+	 * Shared screening for `strict()` and `display()`.
+	 *
+	 * @param string $text       Untrusted text.
+	 * @param int    $max_length Longest result to return, in bytes.
+	 * @param bool   $prose      Whether the prose credential-word rules apply.
+	 */
+	private static function screen( string $text, int $max_length, bool $prose ): ?string {
+		if ( $max_length < 1 || $max_length > self::MAX_INPUT_LENGTH || strlen( $text ) > self::MAX_INPUT_LENGTH ) {
+			return null;
+		}
+		// Non-ASCII, control, format and invisible characters are never accepted, and are never normalized away.
+		if ( 1 !== preg_match( '#\A[\x20-\x7E]+\z#', $text ) ) { // rule: printable_ascii_only
+			return null;
+		}
+		$text = trim( $text, ' ' );
+		if ( '' === $text || self::hostile( $text, $prose ) ) {
+			return null;
+		}
+
+		return rtrim( substr( $text, 0, $max_length ) );
+	}
+
+	/**
 	 * True when the printable-ASCII text matches any rule.
 	 *
-	 * @param string $text Text already confined to printable ASCII.
+	 * @param string $text  Text already confined to printable ASCII.
+	 * @param bool   $prose Whether the prose credential-word rules apply.
 	 */
-	private static function hostile( string $text ): bool {
-		return self::matches_table( $text )
+	private static function hostile( string $text, bool $prose ): bool {
+		return self::matches_table( $text, $prose )
 			|| self::hex_run( $text ) // rule: hex_run
 			|| self::hex_word( $text ) // rule: hex_word
 			|| self::long_mixed_run( $text ) // rule: long_mixed_run
@@ -136,10 +193,11 @@ final class FailureText {
 	/**
 	 * Applies the single-shape rules.
 	 *
-	 * @param string $text Text already confined to printable ASCII.
+	 * @param string $text  Text already confined to printable ASCII.
+	 * @param bool   $prose Whether the prose credential-word rules apply.
 	 */
-	private static function matches_table( string $text ): bool {
-		foreach ( self::RULES as $pattern ) {
+	private static function matches_table( string $text, bool $prose ): bool {
+		foreach ( $prose ? array_merge( self::RULES, self::PROSE_RULES ) : self::RULES as $pattern ) {
 			if ( 1 === preg_match( $pattern, $text ) ) {
 				return true;
 			}
@@ -189,7 +247,7 @@ final class FailureText {
 	}
 
 	/**
-	 * Consecutive space-separated chunks that each mix letters and digits, 24+ characters in all.
+	 * Consecutive space-separated chunks that each mix letters and digits, or mix lower then upper case, 24+ characters in all.
 	 *
 	 * Words of 32 or more characters belong to long_mixed_run. Catches an encoded secret split by whitespace.
 	 *
@@ -199,7 +257,7 @@ final class FailureText {
 		$run = 0;
 		foreach ( (array) preg_split( '#\s+#', (string) preg_replace( '#[^0-9A-Za-z\s]+#', '', $text ) ) as $word ) {
 			$word = (string) $word;
-			if ( strlen( $word ) < 32 && 1 === preg_match( '#\d#', $word ) && 1 === preg_match( '#[A-Za-z]#', $word ) ) {
+			if ( strlen( $word ) < 32 && ( ( 1 === preg_match( '#\d#', $word ) && 1 === preg_match( '#[A-Za-z]#', $word ) ) || 1 === preg_match( '#[a-z].*[A-Z]#', $word ) ) ) {
 				$run += strlen( $word );
 				if ( $run >= 24 ) {
 					return true;

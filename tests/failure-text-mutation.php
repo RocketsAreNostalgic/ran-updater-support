@@ -29,7 +29,7 @@ declare(strict_types=1);
 	if ( ! is_string( $source ) ) {
 		$fail( 'cannot read the screener source' );
 	}
-	/** @var array{hostile: array<string, string>, benign: array<string, string>} $corpus */
+	/** @var array{hostile: array<string, string>, strict_only: array<string, string>, display_only: array<string, string>, benign: array<string, string>, identifiers: array<string, string>, not_identifiers: array<string, string>} $corpus */
 	$corpus = require __DIR__ . '/fixtures/failure-text-corpus.php';
 
 	// Mutants: name => array( source replacement pairs, probe name ).
@@ -43,11 +43,16 @@ declare(strict_types=1);
 		$mutants[ $name ] = array( 'replace' => array( 'self::' . $calls[1][ $index ] . '( $text )' => 'false' ) );
 	}
 	$mutants['printable_ascii_only']    = array( 'replace' => array( "1 !== preg_match( '#\\A[\\x20-\\x7E]+\\z#', \$text )" => 'false' ) );
-	$mutants['bound_before_screening']  = array( 'replace' => array( "'' === \$text || self::hostile( \$text )" => "'' === \$text || self::hostile( substr( \$text, 0, \$max_length ) )" ) );
+	$mutants['bound_before_screening']  = array( 'replace' => array( "'' === \$text || self::hostile( \$text, \$prose )" => "'' === \$text || self::hostile( substr( \$text, 0, \$max_length ), \$prose )" ) );
+	$mutants['strict_applies_prose']    = array( 'replace' => array( 'return self::screen( $text, $max_length, true );' => 'return self::screen( $text, $max_length, false );' ) );
+	$mutants['display_skips_prose']     = array( 'replace' => array( 'return self::screen( $text, $max_length, false );' => 'return self::screen( $text, $max_length, true );' ) );
+	$mutants['identifier_shape']        = array( 'replace' => array( "1 === preg_match( '#\\A[a-z][a-z0-9_]{0,95}\\z#', \$text ) && " => '' ) );
+	$mutants['identifier_length_limit'] = array( 'replace' => array( '{0,95}\\z#' => '{0,200}\\z#' ) );
+	$mutants['identifier_shape_rules']  = array( 'replace' => array( ' && ! self::hostile( $text, false )' => '' ) );
 	$mutants['input_length_cap']        = array( 'replace' => array( ' || strlen( $text ) > self::MAX_INPUT_LENGTH' => '' ) );
 	$mutants['bound_lower_limit']       = array( 'replace' => array( '$max_length < 1 || ' => '' ) );
 	$mutants['bound_upper_limit']       = array( 'replace' => array( '$max_length > self::MAX_INPUT_LENGTH || ' => '' ) );
-	$mutants['empty_result_check']      = array( 'replace' => array( "'' === \$text || self::hostile" => 'self::hostile' ) );
+	$mutants['empty_result_check']      = array( 'replace' => array( "'' === \$text || self::hostile( \$text, \$prose )" => 'self::hostile( $text, $prose )' ) );
 	$mutants['commit_id_end_anchor']    = array( 'replace' => array( ')\z#' => ')$#' ) );
 	$mutants['commit_id_start_anchor']  = array( 'replace' => array( "'#\\A(?:[0-9a-f]{40}" => "'#(?:[0-9a-f]{40}" ) );
 	$mutants['commit_id_lowercase']     = array( 'replace' => array( '[0-9a-f]{40}|[0-9a-f]{64}' => '[0-9a-fA-F]{40}|[0-9a-fA-F]{64}' ) );
@@ -66,9 +71,29 @@ declare(strict_types=1);
 			return null;
 		}
 		if ( in_array( $name, array( 'bound_lower_limit', 'bound_upper_limit' ), true ) ) {
-			foreach ( array( 0, -1, 4097 ) as $bound ) {
-				if ( null !== $call( 'screen', 'Plugin Name', $bound ) ) {
-					return 'bound probe ' . $bound;
+			foreach ( array( 'strict', 'display' ) as $method ) {
+				foreach ( array( 0, -1, 4097 ) as $bound ) {
+					if ( null !== $call( $method, 'Plugin Name', $bound ) ) {
+						return $method . ' bound probe ' . $bound;
+					}
+				}
+			}
+
+			return null;
+		}
+		if ( 'display_skips_prose' === $name ) {
+			foreach ( $corpus['display_only'] as $label => $text ) {
+				if ( null === $call( 'display', $text, 255 ) ) {
+					return $label;
+				}
+			}
+
+			return null;
+		}
+		if ( str_starts_with( $name, 'identifier_' ) ) {
+			foreach ( $corpus['not_identifiers'] as $label => $text ) {
+				if ( null !== $call( 'identifier', $text ) ) {
+					return $label;
 				}
 			}
 
@@ -76,8 +101,13 @@ declare(strict_types=1);
 		}
 		foreach ( array( 120, 255 ) as $bound ) {
 			foreach ( $corpus['hostile'] as $label => $text ) {
-				if ( null !== $call( 'screen', $text, $bound ) ) {
-					return $label;
+				if ( null !== $call( 'display', $text, $bound ) ) {
+					return 'display: ' . $label;
+				}
+			}
+			foreach ( array_merge( $corpus['hostile'], $corpus['strict_only'] ) as $label => $text ) {
+				if ( null !== $call( 'strict', $text, $bound ) ) {
+					return 'strict: ' . $label;
 				}
 			}
 		}

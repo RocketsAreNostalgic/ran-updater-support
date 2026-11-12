@@ -2,12 +2,17 @@
 /**
  * Cross-package corpus for the shared failure-text screener.
  *
- * Returns array{hostile: array<string, string>, benign: array<string, string>}.
+ * Returns six maps of unique label to string:
  *
- * - `hostile`: every value must be dropped (null) by `FailureText::screen()` at
- *   every bound from 1 to 4096. Labels are unique and describe the shape.
- * - `benign`: every value must be returned unchanged by `screen( $value, 4096 )`
- *   and as an exact prefix at any smaller bound.
+ * - `hostile`: dropped (null) by `FailureText::strict()` and `display()` at every
+ *   bound from 1 to 4096.
+ * - `strict_only`: dropped by `strict()` (a credential word followed by text) but
+ *   returned by `display()`, which applies shape rules only.
+ * - `display_only`: curated sentences returned by `display()` and dropped by `strict()`.
+ * - `benign`: returned unchanged by `strict( $value, 4096 )` and `display()`, and as
+ *   an exact bounded prefix at any smaller bound.
+ * - `identifiers`: returned unchanged by `FailureText::identifier()`.
+ * - `not_identifiers`: dropped by `identifier()`.
  *
  * A consumer's tests load this file and assert both lists against the shared
  * screener, so the policy cannot drift between packages. All values are
@@ -103,34 +108,12 @@ return ( static function (): array {
 		'session cookie name'             => 'PHPSESSID abc',
 
 		// Credential words followed by any value.
-		'password sentence'               => 'the password is hunter2',
-		'pwd value'                       => 'pwd hunter2',
-		'passwd value'                    => 'passwd hunter2',
-		'password leetspeak'              => 'passw0rd is x',
-		'passphrase value'                => 'passphrase abc',
-		'password colon'                  => 'password:',
-		'secret value'                    => 'secret value abc',
-		'client secret'                   => 'client_secret abc',
-		'token value'                     => 'token hunter2',
-		'tokens plural'                   => 'tokens abc',
-		'embedded token word'             => 'usertoken abc',
-		'api key spaced'                  => 'api key abc',
 		'api key equals'                  => 'api key = abc',
-		'api key compact'                 => 'apikey abc',
-		'api key underscore'              => 'api_key abc',
-		'authorization value'             => 'Authorization abc',
-		'signature value'                 => 'signature abc',
-		'nonce value'                     => 'nonce abc',
-		'cookie value'                    => 'cookie abc',
-		'set cookie value'                => 'set-cookie abc',
-		'credential value'                => 'credentials abc',
 		'private key words'               => 'my private key',
 		'private key header'              => '-----BEGIN RSA',
 		'ssh key'                         => 'ssh-rsa AAAA',
 		'bearer value'                    => 'Bearer abc123',
-		'bearer short'                    => 'Bearer x',
 		'basic base64'                    => 'Basic dXNlcjpwYXNz',
-		'basic word value'                => 'basic abc',
 
 		// Token prefixes at any length.
 		'github personal'                 => 'ghp_abc',
@@ -196,6 +179,17 @@ return ( static function (): array {
 		'base64 padded'                   => 'H0D8ktokFpR1CXnubPWC8tXX0o4YM13gWrxU0FYOD1MChgxlK/CNVgJSql50IQVG82n7u86MEs/HlXsmUv6adQ==',
 		'mixed run broken by dots'        => 'ypeBEsobvc.r6wjGzmiPc.TaeG7gUfE5.yuYB3hauSLs',
 		'mixed run broken by underscores' => str_repeat( 'aB1_', 11 ),
+		'embedded aws key'                => 'xAKIAIOSFODNN7EXAMPLE',
+		'embedded npm'                    => 'xnpm_abc',
+		'embedded payment'                => 'xsk_live_abc',
+		'embedded jwt'                    => 'xeyJa.eyJb.sig',
+		'embedded bitbucket'              => 'xATBBabc',
+		'embedded google'                 => 'xAIzaSyabc',
+		'embedded google oauth'           => 'xya29.abc',
+		'bare aws prefix'                 => 'AKIA',
+		'bare aws temporary prefix'       => 'ASIA',
+		'base64 split by spaces'          => implode( ' ', array_fill( 0, 8, 'YWJjZGVm' ) ),
+		'base64url split by spaces'       => implode( ' ', array_fill( 0, 8, 'YWJj_GVm' ) ),
 		'dense chunks spaced'             => 'a1b2c3d4 e5f6g7h8 i9j0k1l2 m3n4o5p6',
 		'long lowercase word'             => 'abcdefghijklmnopqrstuvwxyz',
 
@@ -232,6 +226,33 @@ return ( static function (): array {
 		'long benign text then secret'    => str_repeat( 'plain words ', 15 ) . 'ghp_abc',
 	);
 
+	$strict_only = array(
+		'password sentence'   => 'the password is hunter2',
+		'pwd value'           => 'pwd hunter2',
+		'passwd value'        => 'passwd hunter2',
+		'password leetspeak'  => 'passw0rd is x',
+		'passphrase value'    => 'passphrase abc',
+		'password colon'      => 'password:',
+		'secret value'        => 'secret value abc',
+		'client secret'       => 'client_secret abc',
+		'token value'         => 'token hunter2',
+		'tokens plural'       => 'tokens abc',
+		'embedded token word' => 'usertoken abc',
+		'api key spaced'      => 'api key abc',
+		'api key compact'     => 'apikey abc',
+		'api key underscore'  => 'api_key abc',
+		'authorization value' => 'Authorization abc',
+		'signature value'     => 'signature abc',
+		'nonce value'         => 'nonce abc',
+		'cookie value'        => 'cookie abc',
+		'set cookie value'    => 'set-cookie abc',
+		'credential value'    => 'credentials abc',
+		'passphrases plural'  => 'passphrases abc',
+		'passcodes plural'    => 'passcodes abc',
+		'bearer short'        => 'Bearer x',
+		'basic word value'    => 'basic abc',
+	);
+
 	$benign = array(
 		'fixed code'                 => 'package_asset_missing',
 		'fixed code http'            => 'http_404',
@@ -256,8 +277,57 @@ return ( static function (): array {
 		'long plain text'            => rtrim( str_repeat( 'plain words only ', 12 ) ),
 	);
 
+	$display_only = array(
+		'sentence token permissions'  => 'Check the token permissions and organisation approval.',
+		'sentence password incorrect' => 'The password you entered is not correct.',
+		'sentence api key setting'    => 'Enter a valid API key in the settings.',
+		'sentence renew secret'       => 'Ask an administrator to renew the secret.',
+		'sentence token expired'      => 'Token expired. Create a new one.',
+		'sentence signature missing'  => 'The webhook signature is missing from the delivery.',
+		'sentence basic information'  => 'Basic information is required before continuing.',
+	);
+
+	$identifiers = array(
+		'storage transaction'         => 'ran_booster_storage_transaction_unavailable',
+		'storage provider identity'   => 'ran_booster_storage_invalid_provider_identity',
+		'fixed code'                  => 'package_asset_missing',
+		'long fixed code'             => 'plugin_update_fatal_error_rollback_successful',
+		'http code'                   => 'http_404',
+		'single letter'               => 'a',
+		'reason with credential word' => 'credential_rejected',
+		'token reason'                => 'token_expired',
+		'rate reason'                 => 'rate_limited_secondary',
+		'ninety six characters'       => str_repeat( 'ghijk_', 16 ),
+	);
+
+	$not_identifiers = array(
+		'empty'                   => '',
+		'github prefix'           => 'ghp_abc',
+		'npm prefix'              => 'npm_install_failed',
+		'payment prefix'          => 'sk_live_abc',
+		'digest prefix'           => 'sha256_mismatch',
+		'md5 prefix'              => 'md5_failed',
+		'hex word'                => 'abcdef0123456789abcdef',
+		'commit id'               => 'da39a3ee5e6b4b0d3255bfef95601890afd80709',
+		'long word part'          => 'ran_booster_' . str_repeat( 'a', 30 ),
+		'uppercase'               => 'Ran_booster',
+		'leading digit'           => '9starts_with_digit',
+		'leading underscore'      => '_private',
+		'dash'                    => 'has-dash',
+		'space'                   => 'has space',
+		'dot'                     => 'has.dot',
+		'colon'                   => 'has:colon',
+		'trailing newline'        => "plain_id\n",
+		'ninety seven characters' => str_repeat( 'ghijk_', 16 ) . 'a',
+		'non ascii'               => "caf\u{E9}_code",
+	);
+
 	return array(
-		'hostile' => $hostile,
-		'benign'  => $benign,
+		'hostile'         => $hostile,
+		'strict_only'     => $strict_only,
+		'display_only'    => $display_only,
+		'benign'          => $benign,
+		'identifiers'     => $identifiers,
+		'not_identifiers' => $not_identifiers,
 	);
 } )();

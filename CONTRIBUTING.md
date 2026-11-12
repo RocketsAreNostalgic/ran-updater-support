@@ -141,7 +141,7 @@ branch updater and the release updater; the policy and rule list are in the
   then the rule is fixed; a string that must keep passing goes into `benign`.
   Keep the file ASCII (use escapes) and use synthetic shapes, never a real
   credential. Consumers' tests load this file, so do not change its shape
-  (`hostile` and `benign` maps of unique label to string) without a migration note.
+  (six maps of unique label to string; see the file header) without a migration note.
 - Every rule is one row of `FailureText::RULES` or one `// rule:` line in
   `FailureText::hostile()`. Add a rule only with a hostile entry that no other
   rule rejects: `tests/failure-text-mutation.php` removes each rule and each
@@ -149,7 +149,10 @@ branch updater and the release updater; the policy and rule list are in the
   redundant rule has to be removed or justified as the only rejection of an entry.
 - Prefer widening a rule to adding a concept. The screener stays one class of
   pure static functions: no state, no WordPress or extension dependency, printable
-  ASCII output, no redaction, no charset modes. Keep exactly one occurrence of the
+  ASCII output, no redaction. The three screening modes (`strict`, `display`,
+  `identifier`) differ only in the prose credential-word rules and the identifier
+  shape; a shape rule belongs in the shared table so every mode applies it, and a
+  prose-word rule belongs in `PROSE_RULES`. Keep exactly one occurrence of the
   namespace string in the file: the release updater generates a namespace-rewritten
   vendored copy and refuses any other shape. Avoid end-anchored patterns, so a
   bounded prefix of accepted text is always itself acceptable (the property tests
