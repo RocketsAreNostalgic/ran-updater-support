@@ -363,6 +363,8 @@ return ( static function (): array {
 		'passcode at the end'         => 'old passcode',
 		'access key at the end'       => 'old access key',
 		'token between words'         => 'a token appeared',
+		'key phrase alone'            => 'key is',
+		'pin phrase alone'            => 'pin is',
 		'bearer short'                => 'Bearer x',
 		'basic word value'            => 'basic abc',
 	);

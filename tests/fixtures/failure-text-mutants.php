@@ -191,4 +191,6 @@ return array(
 	array( 'prose rules in strict', 'foreach ( self::PROSE_RULES as $pattern )', 'foreach ( array() as $pattern )' ),
 	array( 'prose value rules in strict', 'array_merge( self::RULES, self::PROSE_VALUE_RULES )', 'self::RULES' ),
 	array( 'bound re-screen', 'if ( $bounded !== $text && self::hostile( $bounded, $prose ) ) {', 'if ( false ) {' ),
+	array( 'bound re-screen strict only', 'if ( $bounded !== $text && self::hostile( $bounded, $prose ) ) {', 'if ( $bounded !== $text && $prose && self::hostile( $bounded, $prose ) ) {' ),
+	array( 'bound drops long cuts', 'if ( $bounded !== $text && self::hostile( $bounded, $prose ) ) {', 'if ( $bounded !== $text && ( strlen( $bounded ) > 8 || self::hostile( $bounded, $prose ) ) ) {' ),
 );

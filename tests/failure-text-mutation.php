@@ -94,8 +94,25 @@ declare(strict_types=1);
 
 			return null;
 		}
-		if ( 'bound re-screen' === $name ) {
-			return null === $call( 'strict', 'a passenger rides', 6 ) ? null : 'a cut credential word';
+		if ( str_starts_with( $name, 'bound ' ) ) {
+			if ( null !== $call( 'strict', 'a passenger rides', 6 ) ) {
+				return 'a cut credential word';
+			}
+			foreach ( array( 'strict', 'display' ) as $method ) {
+				if ( null !== $call( $method, 'abcd efgh ijkl mnop qrst uvwxyz', 29 ) ) {
+					return $method . ': a cut application password shape';
+				}
+				foreach ( $corpus['benign'] as $label => $text ) {
+					foreach ( array( 1, 2, 8, 24, 64, 120 ) as $bound ) {
+						$expected = rtrim( substr( $text, 0, $bound ) );
+						if ( $call( $method, $text, $bound ) !== ( $call( $method, $expected, 4096 ) === $expected ? $expected : null ) ) {
+							return $method . ': cut of ' . $label . ' at ' . $bound;
+						}
+					}
+				}
+			}
+
+			return null;
 		}
 		if ( 'display_skips_prose' === $name ) {
 			foreach ( $corpus['display_only'] as $label => $text ) {

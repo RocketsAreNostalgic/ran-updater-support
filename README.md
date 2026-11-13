@@ -141,7 +141,10 @@ The policy, stated precisely:
   text. The accepted result is then cut to `$max_length` bytes.
 - **Drop, never redact.** A text that matches any rule is dropped whole. Nothing
   is masked, rewritten, normalized or partly kept. The only edits to accepted
-  text are trimming surrounding spaces and cutting to the bound.
+  text are trimming surrounding spaces and cutting to the bound, and the cut is
+  screened again: a cut that forms a hostile shape (`a passenger rides` cut to
+  `a pass` in `strict()`; an application-password shape in either mode) drops the
+  text instead of returning the cut.
 - **Closed result.** `strict()` and `display()` return a `string` or `null`. A caller-supplied
   `$max_length` outside 1 to `FailureText::MAX_INPUT_LENGTH` (4,096) returns
   `null`, as does empty text and text longer than 4,096 bytes.
@@ -207,6 +210,11 @@ that is now dropped, so callers must not rely on it:
   keeps such curated sentences and `identifier()` keeps such ids. The word on its own
   passes (`token`, `Passwords`, `authorisation`). A cut that leaves a credential word
   beside other text (`a passenger rides` cut to `a pass`) is screened again and dropped;
+- single dictionary words that end in a credential word, because `pass`, `auth`,
+  `secret` and `token` match inside longer words: `bypass`, `compass`, `overpass`,
+  `underpass`, `trespass`, `encompass`, `surpass` and about 30 more are dropped by
+  `strict()` even alone, as are `OAuth` and `1password`; `passenger` and `tokenizer`
+  still pass;
 - non-ASCII text, any run of 25 or more letters and digits, and any text holding
   `AKIA`, `ASIA`, `eyJ`, `sk-` or `npm_` (`ASIAN`, long CamelCase names, `task-force`,
   `disk-full`), because token prefixes drop at any position;
@@ -295,8 +303,9 @@ six maps of unique label to string:
 - `strict_only`: dropped by `strict()` (a credential word beside other text) but
   returned unchanged by `display()`;
 - `display_only`: curated sentences returned by `display()` and dropped by `strict()`;
-- `benign`: returned unchanged by both modes, and as an exact bounded prefix at
-  smaller bounds;
+- `benign`: returned unchanged by both modes at bound 4,096. At a smaller bound the
+  result is the exact bounded prefix when that prefix itself screens clean, and
+  `null` when the cut forms a hostile shape;
 - `identifiers`: returned unchanged by `identifier()`;
 - `not_identifiers`: dropped by `identifier()`.
 

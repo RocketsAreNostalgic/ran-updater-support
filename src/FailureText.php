@@ -89,7 +89,7 @@ final class FailureText {
 		'credential_nonce'         => '#nonces?(?![a-z])#i',
 		'credential_cookie'        => '#cookies?(?![a-z])#i',
 		'credential_generic'       => '#credentials?(?![a-z])#i',
-		'credential_other'         => '#(?:passwort|jwts?|pass|pw|auth)(?![a-z])|(?:pin|key)(?![a-z])\s+is(?![a-z])|access[ _-]?keys?(?![a-z])#i',
+		'credential_other'         => '#(?:passwort|jwts?|pass|pw|auth)(?![a-z])|access[ _-]?keys?(?![a-z])#i',
 	);
 
 	/**
@@ -98,7 +98,8 @@ final class FailureText {
 	 * @var array<string, string>
 	 */
 	private const PROSE_VALUE_RULES = array(
-		'bearer_or_basic' => '#(?<![a-z0-9])(?:bearer|basic)\s+\S#i',
+		'bearer_or_basic'      => '#(?<![a-z0-9])(?:bearer|basic)\s+\S#i',
+		'credential_phrase_is' => '#(?:pin|key)(?![a-z])\s+is(?![a-z])#i',
 	);
 
 	/**
