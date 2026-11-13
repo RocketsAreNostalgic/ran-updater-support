@@ -67,8 +67,10 @@ declare(strict_types=1);
 
 	// Equivalent mutants: no input can tell them apart from the original, with the reason. Everything else must die.
 	$equivalent = array(
-		'pcre strip fails open' => 'no backtrack limit lets the table rules run and then fails preg_replace(); the limit already fails the table rules first, so the guard is defensive',
-		'pcre split fails open' => 'preg_split() cannot fail where the preg_replace() just before it, on the same text and limits, succeeded; the guard is defensive',
+		'clock offset colon optional removed' => 'a compact offset such as +0000 passes either way: the time is followed by a plus or hyphen, which the lookahead allows, so the offset is never needed to accept it',
+		'clock lookbehind colon'              => 'a time directly after a colon always leaves that colon attached to a digit, which drops the text whether or not the time is stripped',
+		'pcre strip fails open'               => 'no backtrack limit lets the table rules run and then fails preg_replace(); the limit already fails the table rules first, so the guard is defensive',
+		'pcre split fails open'               => 'preg_split() cannot fail where the preg_replace() just before it, on the same text and limits, succeeded; the guard is defensive',
 	);
 
 	$probe = static function ( string $mutant, string $name ) use ( $corpus ): ?string {
