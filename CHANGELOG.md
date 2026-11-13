@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.0-beta.6](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v1.0.0-beta.5...v1.0.0-beta.6) (2026-11-13)
+
+
+### Bug Fixes
+
+* **text:** drop credential header names in every mode ([#64](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/64)) ([91677c7](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/91677c790ceb4c147897eb6d3dddef6e89d4f617))
+* **text:** drop credential words beside any word in strict() ([#61](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/61)) ([469936e](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/469936e689fe2f0ddf3cc06bfe9d583453b0a946))
+
 ## [1.0.0-beta.5](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v1.0.0-beta.4...v1.0.0-beta.5) (2026-11-13)
 
 
