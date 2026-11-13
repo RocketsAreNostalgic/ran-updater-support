@@ -69,33 +69,44 @@ final class FailureText {
 	);
 
 	/**
-	 * Prose rules, applied only by `strict()`: a credential word followed by any value.
+	 * Prose rules, applied only by `strict()`: a credential word beside any other text,
+	 * before or after it. Only a lone word on its own (`token`, `api keys`) passes.
 	 * Curated English sentences that merely mention a token or password are not
 	 * credentials, so `display()` and `identifier()` do not apply these. Credential
 	 * words match inside a longer word (`usertoken`) and across an underscore
-	 * (`client_secret`), but not before a letter (`tokenizer`).
+	 * (`client_secret`), but not before a letter (`tokenizer`). Both spellings of
+	 * authorization match.
 	 *
 	 * @var array<string, string>
 	 */
 	private const PROSE_RULES = array(
-		'credential_password'      => '#(?:passw[o0]rds?|passwds?|pwds?|pass(?:phrase|code)s?)(?![a-z])\s*\S#i',
-		'credential_secret'        => '#secrets?(?![a-z])\s*\S#i',
-		'credential_token'         => '#tokens?(?![a-z])\s*\S#i',
-		'credential_api_key'       => '#api[ _.-]?keys?(?![a-z])\s*\S#i',
-		'credential_authorization' => '#authorization(?![a-z])\s*\S#i',
-		'credential_signature'     => '#signatures?(?![a-z])\s*\S#i',
-		'credential_nonce'         => '#nonces?(?![a-z])\s*\S#i',
-		'credential_cookie'        => '#cookies?(?![a-z])\s*\S#i',
-		'credential_generic'       => '#credentials?(?![a-z])\s*\S#i',
-		'credential_other'         => '#(?:passwort|jwt|pass|pw|auth)(?![a-z])\s*\S|(?:pin|key)(?![a-z])\s+is(?![a-z])|access[ _-]?keys?(?![a-z])\s*\S#i',
-		'bearer_or_basic'          => '#(?<![a-z0-9])(?:bearer|basic)\s+\S#i',
+		'credential_password'      => '#(?:passw[o0]rds?|passwds?|pwds?|pass(?:phrase|code)s?)(?![a-z])#i',
+		'credential_secret'        => '#secrets?(?![a-z])#i',
+		'credential_token'         => '#tokens?(?![a-z])#i',
+		'credential_api_key'       => '#api[ _.-]?keys?(?![a-z])#i',
+		'credential_authorization' => '#authori[sz]ations?(?![a-z])#i',
+		'credential_signature'     => '#signatures?(?![a-z])#i',
+		'credential_nonce'         => '#nonces?(?![a-z])#i',
+		'credential_cookie'        => '#cookies?(?![a-z])#i',
+		'credential_generic'       => '#credentials?(?![a-z])#i',
+		'credential_other'         => '#(?:passwort|jwts?|pass|pw|auth)(?![a-z])|(?:pin|key)(?![a-z])\s+is(?![a-z])|access[ _-]?keys?(?![a-z])#i',
+	);
+
+	/**
+	 * Prose rules that need a value after the word, applied only by `strict()`.
+	 *
+	 * @var array<string, string>
+	 */
+	private const PROSE_VALUE_RULES = array(
+		'bearer_or_basic' => '#(?<![a-z0-9])(?:bearer|basic)\s+\S#i',
 	);
 
 	/**
 	 * STRICT: screens untrusted free-text detail from a foreign package.
 	 *
-	 * Applies every shape rule and the prose credential-word rules, so any
-	 * credential word followed by text drops the whole text. Use for updater
+	 * Applies every shape rule and the prose credential-word rules, so a credential
+	 * word with any other text before or after it drops the whole text; the word on
+	 * its own may pass. Use for updater
 	 * rejection and failure detail, with a small bound.
 	 *
 	 * Null means drop the whole text: it was empty, longer than MAX_INPUT_LENGTH,
@@ -184,12 +195,17 @@ final class FailureText {
 			if ( '' === $text || self::hostile( $text, $prose ) ) {
 				return null;
 			}
+			$bounded = rtrim( substr( $text, 0, $max_length ) );
+			// A cut can leave a credential word at the end of what remains (`a passenger` cut to `a pass`): screen it again.
+			if ( $bounded !== $text && self::hostile( $bounded, $prose ) ) {
+				return null;
+			}
 		} catch ( \RuntimeException ) {
 			// A regular-expression engine failure (backtrack or JIT limit) is never evidence of safety: fail closed.
 			return null;
 		}
 
-		return rtrim( substr( $text, 0, $max_length ) );
+		return $bounded;
 	}
 
 	/**
@@ -214,9 +230,18 @@ final class FailureText {
 	 * @param bool   $prose Whether the prose credential-word rules apply.
 	 */
 	private static function matches_table( string $text, bool $prose ): bool {
-		foreach ( $prose ? array_merge( self::RULES, self::PROSE_RULES ) : self::RULES as $pattern ) {
+		foreach ( $prose ? array_merge( self::RULES, self::PROSE_VALUE_RULES ) : self::RULES as $pattern ) {
 			if ( self::test( $pattern, $text ) ) {
 				return true;
+			}
+		}
+		if ( $prose ) {
+			foreach ( self::PROSE_RULES as $pattern ) {
+				// A credential word beside any other text is dropped; the word alone is not.
+				$found = self::first( $pattern, $text );
+				if ( null !== $found && $found !== $text ) {
+					return true;
+				}
 			}
 		}
 
@@ -327,5 +352,21 @@ final class FailureText {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * The first match of $pattern, or null; an engine failure is thrown, never read as no match.
+	 *
+	 * @param string $pattern Pattern.
+	 * @param string $subject Subject.
+	 * @throws \RuntimeException When the engine fails.
+	 */
+	private static function first( string $pattern, string $subject ): ?string {
+		$matched = preg_match( $pattern, $subject, $found );
+		if ( false === $matched ) {
+			throw new \RuntimeException( 'The regular-expression engine failed.' );
+		}
+
+		return 1 === $matched ? $found[0] : null;
 	}
 }

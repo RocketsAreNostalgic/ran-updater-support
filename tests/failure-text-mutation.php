@@ -94,6 +94,9 @@ declare(strict_types=1);
 
 			return null;
 		}
+		if ( 'bound re-screen' === $name ) {
+			return null === $call( 'strict', 'a passenger rides', 6 ) ? null : 'a cut credential word';
+		}
 		if ( 'display_skips_prose' === $name ) {
 			foreach ( $corpus['display_only'] as $label => $text ) {
 				if ( null === $call( 'display', $text, 255 ) ) {

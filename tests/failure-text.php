@@ -93,11 +93,17 @@ use RAN\UpdaterSupport\V1\FailureText;
 			}
 			foreach ( $bounds as $bound ) {
 				$expected = rtrim( substr( $text, 0, $bound ) );
-				if ( $screen( $text, $bound ) !== $expected ) {
+				$cut      = $screen( $text, $bound );
+				if ( null !== $cut && $cut !== $expected ) {
 					$fail( "benign text was not an exact prefix in {$mode}: {$label} (bound {$bound})" );
 				}
 			}
 		}
+	}
+
+	// A cut that leaves a credential word beside other text is screened again: strict drops it, display keeps it.
+	if ( null !== FailureText::strict( 'a passenger rides', 6 ) || 'a pass' !== FailureText::display( 'a passenger rides', 6 ) ) {
+		$fail( 'a bounded cut was not screened again' );
 	}
 
 	// A null input is null in every mode.
@@ -244,7 +250,7 @@ use RAN\UpdaterSupport\V1\FailureText;
 		$limit = strlen( $text ) + 2;
 		for ( $bound = 1; $bound <= $limit; ++$bound ) {
 			$result = FailureText::strict( $text, $bound );
-			if ( null === $result || ! str_starts_with( $text, $result ) || strlen( $result ) > $bound ) {
+			if ( ( null === $result && $bound >= strlen( $text ) ) || ( null !== $result && ( ! str_starts_with( $text, $result ) || strlen( $result ) > $bound ) ) ) {
 				$fail( "bounding changed acceptance: {$label} (bound {$bound})" );
 			}
 		}
