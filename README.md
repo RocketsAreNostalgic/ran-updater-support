@@ -141,7 +141,10 @@ The policy, stated precisely:
   text. The accepted result is then cut to `$max_length` bytes.
 - **Drop, never redact.** A text that matches any rule is dropped whole. Nothing
   is masked, rewritten, normalized or partly kept. The only edits to accepted
-  text are trimming surrounding spaces and cutting to the bound.
+  text are trimming surrounding spaces and cutting to the bound, and the cut is
+  screened again: a cut that forms a hostile shape (`a passenger rides` cut to
+  `a pass` in `strict()`; an application-password shape in either mode) drops the
+  text instead of returning the cut.
 - **Closed result.** `strict()` and `display()` return a `string` or `null`. A caller-supplied
   `$max_length` outside 1 to `FailureText::MAX_INPUT_LENGTH` (4,096) returns
   `null`, as does empty text and text longer than 4,096 bytes.
@@ -177,7 +180,7 @@ by `tests/failure-text-mutation.php`.
 | Userinfo | any `@` (userinfo, email, `git@host:`), any `%XX` escape (`%40`, `%2e`) | `at_sign`, `percent_escape` |
 | URLs | a colon or question mark attached to the next character (`https://`, `mailto:a`, `a:b`, `?token`); a scheme word then a colon even with spaces (`https :`) | `colon_attached`, `question_attached`, `url_scheme_word` |
 | Paths | any `/`, `\` or `~`; `wp-content`, `wp-admin`, `wp-includes`, `.htaccess`, `.htpasswd`, `public_html`; WordPress and PHP session cookie names; private-key headers | `slash`, `backslash`, `tilde`, `wordpress_path_word`, `session_cookie_name`, `private_key_material` |
-| Credential words (STRICT only) | `password` (and `passw0rd`), `passwd`, `pwd`, `passphrase`, `passcode`, `pass`, `pw`, `passwort`, `jwt`, `auth`, `key is`, `pin is`, `access key`, `secret`, `token`, `api key`, `apikey`, `authorization`, `signature`, `nonce`, `cookie`, `credential` (and plurals) followed by any value, inside a longer word or across an underscore (`usertoken x`, `client_secret x`) but not before a letter (`tokenizer`); `Basic` or `Bearer` followed by any text | `credential_*`, `credential_other`, `bearer_or_basic` |
+| Credential words (STRICT only) | `password` (and `passw0rd`), `passwd`, `pwd`, `passphrase`, `passcode`, `pass`, `pw`, `passwort`, `jwt`, `auth`, `key is`, `pin is`, `access key`, `secret`, `token`, `api key`, `apikey`, `authorization` or `authorisation`, `signature`, `nonce`, `cookie`, `credential` (and plurals) with any other word or text before or after it, inside a longer word or across an underscore (`usertoken x`, `client_secret x`) but not before a letter (`tokenizer`); the word on its own (`token`, `api keys`) passes. `Basic` or `Bearer` followed by any text | `credential_*`, `credential_other`, `bearer_or_basic` |
 | Bearer or Basic token (every mode) | `Basic` or `Bearer` followed by token-like text (a digit, capital letter, `+`, `/` or `=` in it): `Bearer abc123`, `Basic dXNlcjpwYXNz`; `Basic information` is not one | `bearer_basic_token` |
 | WordPress Application Password (every mode) | six space-separated groups of four letters or digits, as WordPress displays one: `abcd efgh ijkl mnop qrst uvwx` (six consecutive four-letter words of ordinary prose match too) | `wordpress_app_password` |
 | Token prefixes at any length, anywhere in the text (`xAKIA...` and bare `AKIA` included) | `gh[pousr]_` and `ghp-`, `github_pat_`, `glpat-` and kin, `xox[abprs]-`, `xapp-`, `npm_`, `sk_live_`, `sk_test_`, `pk_live_`, `sk-`, `AKIA`, `ASIA`, `AROA`, `AIDA`, `ABIA`, `ACCA`, `AGPA`, `ANPA`, `ANVA`, `APKA`, `eyJ`, Bitbucket `ATBB`, `ATCTT3` and `ATATT3`, `AIza`, `ya29.`, `shpat_`, `dop_v1_` | `prefix_*` |
@@ -200,11 +203,18 @@ that is now dropped, so callers must not rely on it:
   and ellipses are dropped, and so are phrases such as `owner/repository`;
 - a colon or question mark followed directly by text: `12:30`, `ratio 3:1`,
   `Error:x`, `what?now`, timestamps such as `2026-11-12T10:00:00Z`;
-- in STRICT only, a credential word followed by anything: `Webhook signature missing`, `Token
-  expired`, `Invalid password.`, `The signature does not match`, `token_expired`,
-  `signature_invalid`, `Basic information`, `A Basic plan`. DISPLAY keeps such curated sentences and `identifier()` keeps such ids. At the end of the text
-  the word passes (`Missing token`, `invalid_signature`), because no value
-  follows;
+- in STRICT only, a credential word with any other word before or after it:
+  `Webhook signature missing`, `Token expired`, `Missing token`, `Invalid password.`,
+  `The signature does not match`, `hunter2 is the password`, `authorisation hunter2`,
+  `token_expired`, `signature_invalid`, `Basic information`, `A Basic plan`. DISPLAY
+  keeps such curated sentences and `identifier()` keeps such ids. The word on its own
+  passes (`token`, `Passwords`, `authorisation`). A cut that leaves a credential word
+  beside other text (`a passenger rides` cut to `a pass`) is screened again and dropped;
+- single dictionary words that end in a credential word, because `pass`, `auth`,
+  `secret` and `token` match inside longer words: `bypass`, `compass`, `overpass`,
+  `underpass`, `trespass`, `encompass`, `surpass` and about 30 more are dropped by
+  `strict()` even alone, as are `OAuth` and `1password`; `passenger` and `tokenizer`
+  still pass;
 - non-ASCII text, any run of 25 or more letters and digits, and any text holding
   `AKIA`, `ASIA`, `eyJ`, `sk-` or `npm_` (`ASIAN`, long CamelCase names, `task-force`,
   `disk-full`), because token prefixes drop at any position;
@@ -225,6 +235,18 @@ closing a credential or path leak.
 Closed reason identifiers go through `identifier()` or are validated against their
 closed list; curated Core sentences go through `display()`. Only text whose
 content the package does not control needs `strict()`.
+
+### Language stance
+
+The screener is English and ASCII by design. Core's own translated copy (`__()`)
+never passes through it. Provider-authored fixed text that goes through `display()` must
+be English ASCII, and non-ASCII text is dropped whole, so a translated string fails
+closed rather than being half-screened. Failures are made translatable by the closed
+reason vocabulary, mapped to Core-owned translatable copy, not by screening translated
+text. The credential-word rules are an English best-effort extra (both `authorization`
+and `authorisation`, and their plurals; no other languages) and are not the guarantee:
+the shape rules and closed call-site values are. Free text from third parties is best
+effort.
 
 ### Scope and limits
 
@@ -278,11 +300,12 @@ six maps of unique label to string:
 
 - `hostile`: dropped (`null`) by `strict()` and `display()` at every bound from 1
   to 4,096;
-- `strict_only`: dropped by `strict()` (a credential word followed by text) but
+- `strict_only`: dropped by `strict()` (a credential word beside other text) but
   returned unchanged by `display()`;
 - `display_only`: curated sentences returned by `display()` and dropped by `strict()`;
-- `benign`: returned unchanged by both modes, and as an exact bounded prefix at
-  smaller bounds;
+- `benign`: returned unchanged by both modes at bound 4,096. At a smaller bound the
+  result is the exact bounded prefix when that prefix itself screens clean, and
+  `null` when the cut forms a hostile shape;
 - `identifiers`: returned unchanged by `identifier()`;
 - `not_identifiers`: dropped by `identifier()`.
 

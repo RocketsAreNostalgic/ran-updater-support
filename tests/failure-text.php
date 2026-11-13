@@ -93,10 +93,24 @@ use RAN\UpdaterSupport\V1\FailureText;
 			}
 			foreach ( $bounds as $bound ) {
 				$expected = rtrim( substr( $text, 0, $bound ) );
-				if ( $screen( $text, $bound ) !== $expected ) {
+				$cut      = $screen( $text, $bound );
+				$wanted   = $expected === $screen( $expected, FailureText::MAX_INPUT_LENGTH ) ? $expected : null;
+				if ( $wanted !== $cut ) {
 					$fail( "benign text was not an exact prefix in {$mode}: {$label} (bound {$bound})" );
 				}
 			}
+		}
+	}
+
+	// A cut that leaves a credential word beside other text is screened again: strict drops it, display keeps it.
+	if ( null !== FailureText::strict( 'a passenger rides', 6 ) || 'a pass' !== FailureText::display( 'a passenger rides', 6 ) ) {
+		$fail( 'a bounded cut was not screened again' );
+	}
+
+	// A cut that forms an application password shape is dropped in both modes.
+	foreach ( $modes as $mode => $screen ) {
+		if ( null !== $screen( 'abcd efgh ijkl mnop qrst uvwxyz', 29 ) || 'abcd efgh ijkl mnop qrst uvwxyz' !== $screen( 'abcd efgh ijkl mnop qrst uvwxyz', 31 ) ) {
+			$fail( "a bounded cut forming an application password shape was not dropped by {$mode}" );
 		}
 	}
 
@@ -244,7 +258,10 @@ use RAN\UpdaterSupport\V1\FailureText;
 		$limit = strlen( $text ) + 2;
 		for ( $bound = 1; $bound <= $limit; ++$bound ) {
 			$result = FailureText::strict( $text, $bound );
-			if ( null === $result || ! str_starts_with( $text, $result ) || strlen( $result ) > $bound ) {
+			$prefix = rtrim( substr( $text, 0, $bound ) );
+			$again  = FailureText::strict( $prefix, FailureText::MAX_INPUT_LENGTH );
+			$wanted = $again === $prefix ? $prefix : null;
+			if ( $wanted !== $result ) {
 				$fail( "bounding changed acceptance: {$label} (bound {$bound})" );
 			}
 		}
