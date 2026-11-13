@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-beta.7](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v1.0.0-beta.6...v1.0.0-beta.7) (2026-11-13)
+
+
+### Bug Fixes
+
+* **text:** allow clock times despite the attached-colon rule ([#66](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/66)) ([acba35f](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/acba35f3c008318bb26bbc17a0b2273993358024))
+
 ## [1.0.0-beta.6](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v1.0.0-beta.5...v1.0.0-beta.6) (2026-11-13)
 
 
