@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.0-beta.5](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v1.0.0-beta.4...v1.0.0-beta.5) (2026-11-13)
+
+
+### Features
+
+* **paths:** report path and entry-type failure reasons ([#55](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/55)) ([2d69bcf](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/2d69bcf178ff1dae605858a492b5d2b02712fbd2))
+* **text:** add shared failure-text screener ([#58](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/58)) ([91c5a77](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/91c5a776f88b61b24cb1cca7772a1252d962b91b))
+
 ## [1.0.0-beta.4](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v0.1.0-beta.4...v1.0.0-beta.4) (2026-09-23)
 
 
