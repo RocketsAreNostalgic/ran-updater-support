@@ -94,7 +94,8 @@ use RAN\UpdaterSupport\V1\FailureText;
 			foreach ( $bounds as $bound ) {
 				$expected = rtrim( substr( $text, 0, $bound ) );
 				$cut      = $screen( $text, $bound );
-				if ( $cut !== ( $screen( $expected, FailureText::MAX_INPUT_LENGTH ) === $expected ? $expected : null ) ) {
+				$wanted   = $expected === $screen( $expected, FailureText::MAX_INPUT_LENGTH ) ? $expected : null;
+				if ( $wanted !== $cut ) {
 					$fail( "benign text was not an exact prefix in {$mode}: {$label} (bound {$bound})" );
 				}
 			}
@@ -257,7 +258,10 @@ use RAN\UpdaterSupport\V1\FailureText;
 		$limit = strlen( $text ) + 2;
 		for ( $bound = 1; $bound <= $limit; ++$bound ) {
 			$result = FailureText::strict( $text, $bound );
-			if ( $result !== ( FailureText::strict( rtrim( substr( $text, 0, $bound ) ), FailureText::MAX_INPUT_LENGTH ) === rtrim( substr( $text, 0, $bound ) ) ? rtrim( substr( $text, 0, $bound ) ) : null ) ) {
+			$prefix = rtrim( substr( $text, 0, $bound ) );
+			$again  = FailureText::strict( $prefix, FailureText::MAX_INPUT_LENGTH );
+			$wanted = $again === $prefix ? $prefix : null;
+			if ( $wanted !== $result ) {
 				$fail( "bounding changed acceptance: {$label} (bound {$bound})" );
 			}
 		}
