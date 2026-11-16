@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-beta.8](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v1.0.0-beta.7...v1.0.0-beta.8) (2026-11-16)
+
+
+### Features
+
+* **paths:** detect target working copies ([#69](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/69)) ([f46bb24](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/f46bb24314f2bb1057116bce80f2fabb2a5684c5))
+
 ## [1.0.0-beta.7](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v1.0.0-beta.6...v1.0.0-beta.7) (2026-11-13)
 
 
