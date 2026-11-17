@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-beta.9](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v1.0.0-beta.8...v1.0.0-beta.9) (2026-11-17)
+
+
+### Features
+
+* **paths:** share package directory rules and derivation ([#72](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/72)) ([a5262e8](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/a5262e8a9ad5785cf48bf53a674a27dbef761252))
+
 ## [1.0.0-beta.8](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v1.0.0-beta.7...v1.0.0-beta.8) (2026-11-16)
 
 
