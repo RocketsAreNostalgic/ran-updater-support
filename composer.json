@@ -35,6 +35,7 @@
     "validate:strict": "composer validate --strict --no-check-publish",
     "test:standards": "node --test tests/owned-methods.test.mjs",
     "test:contract": "php tests/contract.php",
+    "test:package-directory": "php tests/package-directory.php",
     "test:working-copy": "php tests/working-copy.php",
     "test:failure-text": "php tests/failure-text.php",
     "test:failure-text-mutation": "php tests/failure-text-mutation.php",
@@ -49,6 +50,7 @@
     "test": [
       "@test:analysis-coverage",
       "@test:contract",
+      "@test:package-directory",
       "@test:working-copy",
       "@test:failure-text",
       "@test:failure-text-mutation",

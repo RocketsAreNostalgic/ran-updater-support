@@ -97,6 +97,64 @@ decode passes). `collision_failure()` already returns the distinct codes
 `path_duplicate` and `file_parent_collision`; it does not report which path
 collided.
 
+## Package directories
+
+`RAN\UpdaterSupport\V1\PackageDirectory` owns package folder names and the
+optional repository subdirectory handling shared by Core and the branch updater.
+It is pure PHP, with no filesystem or WordPress access.
+
+| Method | Contract |
+| --- | --- |
+| `is_valid_name( string $value ): bool` | Exactly 1–191 ASCII bytes: a letter or digit, followed by letters, digits, dots, underscores or hyphens. Capitals are allowed. No trimming or case folding. |
+| `installed_slug( string $package_type, string $identifier ): string` | For `plugin`, the last directory of the plugin file, or its filename without the extension for a single-file plugin. For `theme`, the stylesheet unchanged. Retains case; accepts consumer-validated WordPress identifiers, rather than validating identifier safety. Other package types throw `InvalidArgumentException`. |
+| `normalize( mixed $value ): ?string` | Optional repository subdirectory: `null`, empty and space-only strings become `null`; other strings use `RepositoryRelativePath::normalize()`. Controls, including whitespace controls, and non-strings are rejected. |
+| `slug( mixed $value ): string` | Final segment of a normalized, required repository subdirectory, retaining case. |
+| `normalize_slug( mixed $value ): string` | Legacy provider-name normalization: one required repository path segment, with surrounding spaces trimmed and no trailing slash. |
+| `installation_slug( mixed $provider_slug, mixed $subdirectory ): string` | The subdirectory's final segment when present, otherwise the normalized provider name. Retains case; this is source derivation, not an installed-folder lookup. |
+| `deployment_slug( mixed $provider_slug, mixed $subdirectory ): string` | Lower-cases `installation_slug()` for a new install only. |
+
+The 191-byte admission limit preserves every name accepted by the previous
+100-byte, mixed-case release rule or 191-byte, lower-case branch rule. Compare
+admitted names with exact equality: `MyPlugin` and `myplugin` remain different.
+This rule does not claim filesystem portability or replace archive-safety checks.
+
+The five legacy normalization/derivation methods deliberately retain their
+broader path semantics, including punctuation, non-ASCII segments and names
+longer than 191 bytes. They do **not** perform folder-name admission. Validate
+the resulting destination with `is_valid_name()` at the consumer's existing
+admission boundary. Invalid legacy inputs throw `InvalidArgumentException` with
+the fixed message `The package subdirectory must be a normalized relative path.`;
+the rejected value never enters the exception. Repository path failures are
+mapped to that message, as in the two former consumer copies.
+
+```php
+use RAN\UpdaterSupport\V1\PackageDirectory;
+
+$source = PackageDirectory::normalize( ' packages/MyPlugin/ ' ); // packages/MyPlugin
+$new    = PackageDirectory::deployment_slug( '', $source );     // myplugin
+$live   = PackageDirectory::installed_slug( 'plugin', 'MyPlugin/Main.php' ); // MyPlugin
+$single = PackageDirectory::installed_slug( 'plugin', 'Single.php' );        // Single
+$theme  = PackageDirectory::installed_slug( 'theme', 'MixedCaseTheme' );     // MixedCaseTheme
+$valid  = PackageDirectory::is_valid_name( $live );             // true
+```
+
+Consumer adoption requires a published support release. Core and the branch
+updater can replace their `PackageSubdirectory` copies with this class and retain
+the five existing method names. Branch catches of `InvalidArgumentException`
+continue to work; Core's specific `InvalidPackageSubdirectory` catches must
+catch the shared exception or translate at their own outward boundary. Replace
+deployment folder predicates with `is_valid_name()` while retaining each
+consumer's outward failure codes. Installed identity derivation does not consult
+repository subdirectories, change lookup-key case folding, or authorize a folder
+rename. Preserve exact installed-identifier mismatch refusals. The release
+updater uses the folder predicate for its archive root; header-file syntax and
+extension checks remain its responsibility. Release subdirectories gain no
+support from this helper.
+
+`composer test:package-directory` compares all five legacy methods case by case
+against frozen Core and branch implementations at the commits recorded in the
+test fixtures. It also covers folder admission and installed/new-install names.
+
 ## Failure text
 
 `FailureText` is the one screener that decides whether untrusted failure text
