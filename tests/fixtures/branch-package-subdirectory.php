@@ -1,0 +1,67 @@
+<?php
+
+declare(strict_types=1);
+
+namespace RAN\UpdaterSupport\V1\Tests;
+
+// Frozen from ran-wp-branch-updater 8b76e0e727760fc6cb20b1dbcae4cb29959803fb,
+// src/Archive/PackageSubdirectory.php (v1.0.0-beta.16). Only namespace/class names change.
+use InvalidArgumentException;
+use RAN\UpdaterSupport\V1\RepositoryRelativePath;
+
+/** Normalize and validate a repository-relative package directory. */
+final class BranchPackageSubdirectory {
+	public static function normalize( mixed $value ): ?string {
+		if ( null === $value ) {
+			return null;
+		}
+		if ( ! is_string( $value ) ) {
+			throw self::invalid();
+		}
+		if ( '' === trim( $value ) ) {
+			if ( 1 === preg_match( '/[\x00-\x1F\x7F]/', $value ) ) {
+				throw self::invalid();
+			}
+			return null;
+		}
+
+		try {
+			return RepositoryRelativePath::normalize( $value );
+		} catch ( InvalidArgumentException ) {
+			throw self::invalid();
+		}
+	}
+
+	public static function slug( mixed $value ): string {
+		$path = self::normalize( $value );
+		if ( null === $path ) {
+			throw self::invalid();
+		}
+		$segments = explode( '/', $path );
+		return (string) end( $segments );
+	}
+
+	public static function normalize_slug( mixed $value ): string {
+		$slug = self::normalize( $value );
+		if ( null === $slug
+			|| ! is_string( $value )
+			|| str_ends_with( trim( $value ), '/' )
+			|| str_contains( $slug, '/' ) ) {
+			throw self::invalid();
+		}
+		return $slug;
+	}
+
+	public static function installation_slug( mixed $provider_slug, mixed $subdirectory ): string {
+		$path = self::normalize( $subdirectory );
+		return null === $path ? self::normalize_slug( $provider_slug ) : self::slug( $path );
+	}
+
+	public static function deployment_slug( mixed $provider_slug, mixed $subdirectory ): string {
+		return strtolower( self::installation_slug( $provider_slug, $subdirectory ) );
+	}
+
+	private static function invalid(): InvalidArgumentException {
+		return new InvalidArgumentException( 'The package subdirectory must be a normalized relative path.' );
+	}
+}
