@@ -79,5 +79,63 @@ use RAN\UpdaterSupport\V1\Tests\BranchPackageSubdirectory;
 	$check( 'installed folder is authoritative', 'myplugin', PackageDirectory::installed_slug( 'plugin', 'myplugin/Main.php' ) );
 	$check( 'source case stays distinct', false, PackageDirectory::installed_slug( 'theme', 'myplugin' ) === PackageDirectory::installation_slug( '', 'packages/MyPlugin' ) );
 	$check( 'invalid package type', array( 'invalid', 'The package type is invalid.' ), $outcome( static fn(): string => PackageDirectory::installed_slug( 'other', 'example' ) ) );
+
+	// Identity: the installed folder is the source name exactly or in its lower-case new-install form.
+	$non_ascii       = "caf\xc3\xa9";
+	$non_ascii_upper = "CAF\xc3\x89";
+	foreach ( array(
+		array( 'MyPlugin', 'MyPlugin', true ),
+		array( 'myplugin', 'MyPlugin', true ),
+		array( 'myplugin', 'myplugin', true ),
+		array( 'tnyGmaps', 'tnyGmaps', true ),
+		array( 'example', 'Example', true ),
+		array( 'MyPlugin', 'myplugin', false ),
+		array( 'MYPLUGIN', 'MyPlugin', false ),
+		array( 'tnyGmaps', 'tnygmaps', false ),
+		array( 'example', 'forms', false ),
+		array( 'my-plugin', 'my_plugin', false ),
+		array( $non_ascii, $non_ascii_upper, false ),
+		array( strtolower( $non_ascii_upper ), $non_ascii_upper, true ),
+	) as [$installed, $source, $expected] ) {
+		$check( 'installed folder match: ' . bin2hex( $installed . '|' . $source ), $expected, PackageDirectory::installed_folder_matches( $installed, $source ) );
+	}
+
+	// Collision: names that could be one folder on a case-insensitive filesystem.
+	foreach ( array(
+		array( 'MyPlugin', 'myplugin', true ),
+		array( 'MyPlugin', 'MYPLUGIN', true ),
+		array( 'a', 'a', true ),
+		array( 'my-plugin', 'my_plugin', false ),
+		array( 'plugin', 'plugin ', false ),
+		array( 'my', 'myplugin', false ),
+		array( $non_ascii, $non_ascii_upper, false ),
+		array( 'a/b', 'A/c', false ),
+	) as [$first, $second, $expected] ) {
+		$check( 'names collide: ' . bin2hex( $first . '|' . $second ), $expected, PackageDirectory::names_collide( $first, $second ) );
+		$check( 'names collide symmetrically: ' . bin2hex( $first . '|' . $second ), $expected, PackageDirectory::names_collide( $second, $first ) );
+	}
+	$check( 'collision key folds ASCII letters only', 'my.plugin_v2-x', PackageDirectory::collision_key( 'My.Plugin_V2-X' ) );
+	$check( 'collision key leaves non-ASCII bytes', "caf\xc3\x89", PackageDirectory::collision_key( $non_ascii_upper ) );
+	$check( 'collision key of a key is unchanged', 'my.plugin_v2-x', PackageDirectory::collision_key( PackageDirectory::collision_key( 'My.Plugin_V2-X' ) ) );
+	// Locale independence: exactly bytes A-Z change, whatever locale the process uses.
+	for ( $byte = 0; $byte < 256; ++$byte ) {
+		$check( 'collision key byte ' . $byte, chr( $byte >= 65 && $byte <= 90 ? $byte + 32 : $byte ), PackageDirectory::collision_key( chr( $byte ) ) );
+	}
+
+	// Properties over a name corpus with case variants: names_collide() is strcasecmp() equality,
+	// and installed_folder_matches() is the exact-or-new-install rule written in terms of deployment_slug().
+	$corpus = array( 'plugin', 'Plugin', 'PLUGIN', 'MixedCaseTheme', 'mixedcasetheme', 'A', 'a', '0', 'My.Plugin_2-', 'my.plugin_2-', 'tnyGmaps', 'tnygmaps', 'TNYGMAPS', 'my-plugin', 'my_plugin', str_repeat( 'a', 191 ), str_repeat( 'A', 191 ), $non_ascii, $non_ascii_upper, '', ' plugin', 'a/b', 'A/B' );
+	foreach ( $corpus as $first ) {
+		foreach ( $corpus as $second ) {
+			$label      = bin2hex( $first . '|' . $second );
+			$case_equal = 0 === strcasecmp( $first, $second );
+			$check( 'names collide as strcasecmp: ' . $label, $case_equal, PackageDirectory::names_collide( $first, $second ) );
+			$check( 'collision key equality as names collide: ' . $label, PackageDirectory::names_collide( $first, $second ), PackageDirectory::collision_key( $first ) === PackageDirectory::collision_key( $second ) );
+			if ( PackageDirectory::is_valid_name( $first ) && PackageDirectory::is_valid_name( $second ) ) {
+				$check( 'installed folder match as deployment slug: ' . $label, in_array( $first, array( $second, PackageDirectory::deployment_slug( $second, null ) ), true ), PackageDirectory::installed_folder_matches( $first, $second ) );
+				$check( 'installed folder match implies collision: ' . $label, true, ! PackageDirectory::installed_folder_matches( $first, $second ) || PackageDirectory::names_collide( $first, $second ) );
+			}
+		}
+	}
 	printf( "Package directory contract passed: %d comparisons.\n", (int) $checks );
 } )();

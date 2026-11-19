@@ -112,10 +112,14 @@ It is pure PHP, with no filesystem or WordPress access.
 | `normalize_slug( mixed $value ): string` | Legacy provider-name normalization: one required repository path segment, with surrounding spaces trimmed and no trailing slash. |
 | `installation_slug( mixed $provider_slug, mixed $subdirectory ): string` | The subdirectory's final segment when present, otherwise the normalized provider name. Retains case; this is source derivation, not an installed-folder lookup. |
 | `deployment_slug( mixed $provider_slug, mixed $subdirectory ): string` | Lower-cases `installation_slug()` for a new install only. |
+| `installed_folder_matches( string $installed_folder, string $source_name ): bool` | Identity: the installed folder equals the source-derived name exactly, or its lower-case new-install form. |
+| `collision_key( string $name ): string` | ASCII `A`–`Z` folded to `a`–`z`; every other byte unchanged. Equal keys mean the names could be one folder. |
+| `names_collide( string $first, string $second ): bool` | Lock, scope and collision checks: `collision_key()` equality. |
 
 The 191-byte admission limit preserves every name accepted by the previous
-100-byte, mixed-case release rule or 191-byte, lower-case branch rule. Compare
-admitted names with exact equality: `MyPlugin` and `myplugin` remain different.
+100-byte, mixed-case release rule or 191-byte, lower-case branch rule. Admitted
+names keep their case: `MyPlugin` and `myplugin` are different names. Compare
+them with the methods in [Comparing package folder names](#comparing-package-folder-names).
 This rule does not claim filesystem portability or replace archive-safety checks.
 
 The five legacy normalization/derivation methods deliberately retain their
@@ -151,9 +155,81 @@ updater uses the folder predicate for its archive root; header-file syntax and
 extension checks remain its responsibility. Release subdirectories gain no
 support from this helper.
 
+### Comparing package folder names
+
+An installed package keeps the case of the folder it is in. A new installation
+uses the lower-case form of its source-derived name. Whether two names are "the
+same" depends on what the comparison protects, so there are three methods and
+no other folder-name comparison should be written by hand.
+
+| The comparison protects | Use | Rule |
+| --- | --- | --- |
+| Identity of one package: is this installed folder the one this source installs as? | `installed_folder_matches( $installed_folder, $source_name )` | Exact, or the source name's lower-case new-install form. The installed folder is never folded. |
+| A lock, a scope or a collision: could these two names be one folder? | `names_collide( $first, $second )` | ASCII case-insensitive. |
+| A map key or a SQL value for the collision rule | `collision_key( $name )` | The folded name; equal keys collide. |
+| Identity of an admitted name against another spelling that must be the same name, such as a configured archive root or a WordPress-reported identifier | `===` or `hash_equals()` | Exact. |
+
+```php
+use RAN\UpdaterSupport\V1\PackageDirectory;
+
+PackageDirectory::installed_folder_matches( 'myplugin', 'MyPlugin' ); // true: the new-install form
+PackageDirectory::installed_folder_matches( 'MyPlugin', 'myplugin' ); // false: installed case is kept
+PackageDirectory::names_collide( 'MyPlugin', 'myplugin' );            // true
+PackageDirectory::names_collide( 'my-plugin', 'my_plugin' );          // false
+PackageDirectory::collision_key( 'My.Plugin_V2' );                    // my.plugin_v2
+```
+
+A lock or scope must be at least as wide as identity: whenever
+`installed_folder_matches()` is true, `names_collide()` is true. Folding covers
+ASCII letters only and does not depend on the PHP locale; any other byte,
+including every non-ASCII byte, compares exactly. None of the three methods
+validates its input or throws: admit names with `is_valid_name()` first, as the
+consumer already does.
+
+#### SQL
+
+The library builds no SQL. To apply the collision rule in a query, bind
+`collision_key()` as the value and wrap the column once as `LOWER(column)`; for a
+prefix, bind `collision_key( $folder ) . '/'` escaped with the driver's own LIKE
+escaping. A column that already stores `collision_key()` values can be compared
+directly.
+
+```php
+$key   = PackageDirectory::collision_key( $folder );
+$query = $wpdb->prepare(
+	'SELECT * FROM %i WHERE LOWER(package) = %s OR LOWER(package) LIKE %s',
+	$table,
+	$key,
+	$wpdb->esc_like( $key . '/' ) . '%'
+);
+```
+
+Precondition: `LOWER(column)` equals `collision_key()` only when the column's
+collation maps ASCII `I` to `i`. Turkish and Azeri collations map it to dotless
+`ı`, so the query can miss a colliding row, and a missed row lets a lock or
+scope check pass. A consumer that cannot rule those collations out, or for
+which a missed row is unsafe, selects by its other columns and decides each row
+in PHP with `names_collide()`. A bare `column = %s` takes its case rule from the
+collation and is not this rule; write exact identity as `BINARY column = BINARY %s`.
+
+#### Exceptions
+
+These comparisons cannot call a method directly. Each is documented where it is
+made.
+
+- Full WordPress identifiers (`folder/main.php`) used as registry or reservation
+  keys keep their local separator and leading-slash handling, then fold the whole
+  identifier with `collision_key()`.
+- Full filesystem paths (realpath equality, destination existence, root
+  containment) are decided by the filesystem and the operating system, not by a
+  folder-name rule.
+- Archive entry paths use `ArchiveSafety::collision_failure()`.
+
 `composer test:package-directory` compares all five legacy methods case by case
 against frozen Core and branch implementations at the commits recorded in the
-test fixtures. It also covers folder admission and installed/new-install names.
+test fixtures. It also covers folder admission and installed/new-install names,
+every comparison case above, and checks `names_collide()` against `strcasecmp()`
+over a name corpus with case variants.
 
 ## Failure text
 
