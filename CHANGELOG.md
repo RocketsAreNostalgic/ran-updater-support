@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-beta.10](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v1.0.0-beta.9...v1.0.0-beta.10) (2026-11-19)
+
+
+### Features
+
+* **paths:** add shared package folder name comparison ([#74](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/74)) ([01a4e70](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/01a4e70d24da2908eee79fa393296358a85ee56e))
+
 ## [1.0.0-beta.9](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v1.0.0-beta.8...v1.0.0-beta.9) (2026-11-17)
 
 
