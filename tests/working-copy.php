@@ -7,6 +7,9 @@ require_once dirname( __DIR__ ) . '/src/TargetWorkingCopy.php';
 use RAN\UpdaterSupport\V1\TargetWorkingCopy;
 
 ( static function (): void {
+	if ( TargetWorkingCopy::is_working_copy( '' ) ) {
+		throw new RuntimeException( 'An empty working-copy target must be refused.' );
+	}
 	$ran_root = sys_get_temp_dir() . '/ran-working-copy-' . bin2hex( random_bytes( 8 ) );
 	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Isolated CLI filesystem fixture requires native operations.
 	mkdir( $ran_root );
