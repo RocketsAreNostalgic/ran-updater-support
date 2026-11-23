@@ -31,7 +31,8 @@ final class ArchivePolicyTest extends TestCase {
 	public function test_unicode_paths_require_explicit_opt_in(): void {
 		// A destination can equate case variants or a composed and decomposed spelling.
 		foreach ( array( 'plugin/É.svg', "plugin/E\u{0301}.svg", 'plugin/é.svg/画像.svg' ) as $path ) {
-			self::assertNull( ArchiveSafety::path_failure( $path ) );
+			self::assertSame( 'path_unsafe_character', ArchiveSafety::path_failure( $path ) );
+			self::assertNull( ArchiveSafety::path_failure( $path, allow_utf8: true ) );
 			self::assertNull( ArchiveSafety::normalize_path( $path ) );
 			self::assertSame(
 				array(
@@ -48,8 +49,11 @@ final class ArchivePolicyTest extends TestCase {
 			),
 			ArchiveSafety::normalize_path( 'plugin/ресурсы/ملفات/', allow_utf8: true )
 		);
-		self::assertNull( ArchiveSafety::path_failure( str_repeat( '界', 85 ) ) );
-		self::assertSame( 'component_too_long', ArchiveSafety::path_failure( str_repeat( '界', 85 ) . 'x' ) );
+		self::assertNull( ArchiveSafety::path_failure( str_repeat( '界', 85 ), allow_utf8: true ) );
+		self::assertSame( 'component_too_long', ArchiveSafety::path_failure( str_repeat( '界', 85 ) . 'x', allow_utf8: true ) );
+		self::assertSame( 'path_unsafe_character', ArchiveSafety::path_failure( str_repeat( '界', 85 ) . 'x' ) );
+		self::assertSame( 'path_control_character', ArchiveSafety::path_failure( "é\u{200e}" ) );
+		self::assertSame( 'path_unsafe_character', ArchiveSafety::path_failure( "plugin/\xff", allow_utf8: true ) );
 	}
 
 	public function test_policy_reasons_and_size_floor(): void {
@@ -111,7 +115,7 @@ final class ArchivePolicyTest extends TestCase {
 				$stat = $zip->statIndex( 0 );
 				self::assertIsArray( $stat );
 				self::assertSame( 'plugin/画像.svg', $stat['name'] );
-				self::assertNull( ArchiveSafety::path_failure( $stat['name'] ) );
+				self::assertNull( ArchiveSafety::path_failure( $stat['name'], allow_utf8: true ) );
 				self::assertSame( ZipArchive::EM_NONE, $stat['encryption_method'] );
 				self::assertNull( ArchiveSafety::entry_policy_failure( $stat, false, ArchiveSafety::maximum_expanded_bytes( 2 ) ) );
 			} finally {

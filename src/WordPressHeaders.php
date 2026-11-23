@@ -12,9 +12,10 @@ final class WordPressHeaders {
 	/**
 	 * Read and parse one local header file on demand, up to MAX_BYTES.
 	 *
-	 * An unavailable or non-regular file yields null. A readable file without
-	 * matching headers yields an empty array. The caller resolves the installed
-	 * path and enforces containment and package identity before calling.
+	 * An unavailable or non-regular file yields null, as does a change in
+	 * observed file identity. A readable file without matching headers yields
+	 * an empty array. The caller resolves the installed path and enforces
+	 * containment and package identity before calling.
 	 *
 	 * @param string                $path   Resolved local header file.
 	 * @param array<string, string> $labels Result keys mapped to their on-disk labels.
@@ -22,13 +23,46 @@ final class WordPressHeaders {
 	 * @return array<string, non-empty-list<string>>|null
 	 */
 	public static function read( string $path, array $labels ): ?array {
-		if ( null === RegularFileStat::read( $path ) ) {
+		$before = RegularFileStat::read( $path );
+		if ( null === $before ) {
 			return null;
 		}
 
-		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Read only the local header window. A removed or unreadable file yields null.
-		$contents = @file_get_contents( $path, false, null, 0, self::MAX_BYTES );
-		return false === $contents ? null : self::parse( $contents, $labels );
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Open one local handle for identity checks and the bounded read. An unavailable file yields null.
+		$handle = @fopen( $path, 'rb' );
+		if ( false === $handle ) {
+			return null;
+		}
+		try {
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- An unavailable handle snapshot yields null.
+			$opened = @fstat( $handle );
+			if ( false === $opened || 0100000 !== ( $opened['mode'] & 0170000 ) || ! self::same_identity( $before, $opened ) ) {
+				return null;
+			}
+
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_fread -- Read only the header window from the checked handle. A read failure yields null.
+			$contents = @fread( $handle, self::MAX_BYTES );
+			if ( false === $contents ) {
+				return null;
+			}
+
+			$after = RegularFileStat::read( $path );
+			return null !== $after && self::same_identity( $opened, $after ) ? self::parse( $contents, $labels ) : null;
+		} finally {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Release the same local handle on every exit.
+			fclose( $handle );
+		}
+	}
+
+	/**
+	 * @param array{dev:int,ino:int,size:int,mtime:int,ctime:int} $left  File snapshot.
+	 * @param array{dev:int,ino:int,size:int,mtime:int,ctime:int} $right File snapshot.
+	 */
+	private static function same_identity( array $left, array $right ): bool {
+		return $left['dev'] === $right['dev'] && $left['ino'] === $right['ino']
+			&& ( 0 !== $left['ino'] || (
+				$left['size'] === $right['size'] && $left['mtime'] === $right['mtime'] && $left['ctime'] === $right['ctime']
+			) );
 	}
 
 	/**

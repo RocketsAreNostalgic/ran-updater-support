@@ -74,9 +74,10 @@ final class ArchiveSafety {
 	 *
 	 * Returns the first failing check, in the order of the PATH_FAILURES list
 	 * for whole-name checks and then per component from the first component.
-	 * The result is one of PATH_FAILURES and never contains the name.
+	 * Like normalize_path(), this admits ASCII by default. The result is one of
+	 * PATH_FAILURES and never contains the name.
 	 */
-	public static function path_failure( string $name ): ?string {
+	public static function path_failure( string $name, bool $allow_utf8 = false ): ?string {
 		if ( '' === $name ) {
 			return 'path_empty';
 		}
@@ -90,7 +91,11 @@ final class ArchiveSafety {
 		if ( 1 === $control ) {
 			return 'path_control_character';
 		}
-		if ( false === $control || 0 !== preg_match( '/[\\\\:<>"|?*]/', $name ) ) {
+		if (
+			false === $control
+			|| ( ! $allow_utf8 && 0 !== preg_match( '/[^\x00-\x7f]/', $name ) )
+			|| 0 !== preg_match( '/[\\\\:<>"|?*]/', $name )
+		) {
 			return 'path_unsafe_character';
 		}
 
@@ -126,7 +131,7 @@ final class ArchiveSafety {
 	 * @return array{path:string,directory:bool}|null
 	 */
 	public static function normalize_path( string $name, bool $allow_utf8 = false ): ?array {
-		if ( null !== self::path_failure( $name ) || ( ! $allow_utf8 && 0 !== preg_match( '/[^\x00-\x7f]/', $name ) ) ) {
+		if ( null !== self::path_failure( $name, $allow_utf8 ) ) {
 			return null;
 		}
 

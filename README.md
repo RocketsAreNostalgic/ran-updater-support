@@ -2,7 +2,7 @@
 
 `ran/updater-support` provides shared archive, failure-text, and local file primitives for RAN updater packages. The library supports PHP 8.2 and later 8.x releases without WordPress. Archive policy evaluates the metadata supplied by the caller.
 
-`ArchiveSafety::path_failure()` validates UTF-8 relative paths with one optional trailing slash. It rejects control and format characters, line and paragraph separators, traversal, empty components, Windows-reserved names, unsafe punctuation, trailing spaces or dots, and paths or components over the documented byte limits.
+`ArchiveSafety::path_failure()` validates ASCII relative paths by default, with one optional trailing slash. It can also validate UTF-8 paths when explicitly enabled. It rejects control and format characters, line and paragraph separators, traversal, empty components, Windows-reserved names, unsafe punctuation, trailing spaces or dots, and paths or components over the documented byte limits.
 
 `entry_type_reason()` accepts ZIP origin OS values DOS (`0`) and UNIX (`3`). UNIX accepts unspecified, regular, and directory modes. DOS accepts unspecified file flags or a matching directory bit and rejects volume labels. `collision_failure()` detects duplicate paths and files used as ancestors while allowing explicit or implicit directories.
 
@@ -35,10 +35,11 @@ $collision = ArchiveSafety::collision_failure([
 
 Only pass successfully normalized entry facts to `collision_failure()`. It returns
 `path_duplicate`, `file_parent_collision`, or `null`. Collision checks fold
-ASCII case and compare other bytes exactly. `normalize_path()` defaults to
-ASCII for compatibility. An extractor that checks any additional case and
-normalization equivalences on its destination filesystem can pass
-`allow_utf8: true` to receive validated UTF-8 paths with their spelling intact.
+ASCII case and compare other bytes exactly. `path_failure()` and `normalize_path()`
+both default to ASCII for compatibility. An extractor that checks additional
+case and normalization equivalences on its destination filesystem can pass
+`allow_utf8: true` to either method. Normalization retains the spelling of
+validated UTF-8 paths.
 
 ### Shared ZIP policy
 
@@ -91,7 +92,7 @@ Guarantees, stated precisely:
 Archive path reasons (`path_failure()`, checked in this order): `path_empty`,
 `path_too_long` (over 4,096 bytes), `path_absolute` (leading slash),
 `path_control_character` (control, format, line or paragraph separator),
-`path_unsafe_character` (malformed UTF-8 or one of `\ : < > " | ? *`),
+`path_unsafe_character` (non-ASCII in default mode, malformed UTF-8, or one of `\ : < > " | ? *`),
 `path_empty_component` (a `//`, or an empty
 name before or after a slash), `path_dot_segment` (`.` or `..`),
 `component_too_long` (over 255 bytes), `component_trailing_dot_or_space`,
@@ -258,9 +259,10 @@ over a name corpus with case variants.
   comment prefixes and terminators, including a compact `<?php/**` opening.
   Callers decide which fields are required, how to handle duplicates, and what
   values to admit.
-- **`WordPressHeaders::read($path, $labels)`** performs one bounded local header
-  read on demand and passes the bytes to the same parser. An unavailable or
-  non-regular file returns `null`. A readable file with no matching labels
+- **`WordPressHeaders::read($path, $labels)`** reads up to 8 KiB from one local
+  handle. It checks that the pathname identifies the opened regular file before
+  and after the read. An unavailable file, a non-regular file, or a detected
+  change in identity returns `null`. A readable file with no matching labels
   returns an empty array. The caller resolves the installed file and checks
   containment and package identity.
 - **`TemporaryArchive::with_archive($allocate, $acquire, $consume, $limit, $sha256, $size)`**
