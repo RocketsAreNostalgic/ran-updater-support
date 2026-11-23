@@ -135,4 +135,52 @@ final class ArchivePolicyTest extends TestCase {
 			unlink( $path );
 		}
 	}
+
+	public function test_accepts_macos_and_ntfs_zip_origins_and_rejects_special_entries(): void {
+		if ( ! class_exists( ZipArchive::class ) ) {
+			self::markTestSkipped( 'The optional ZIP extension is unavailable.' );
+		}
+		$path = tempnam( sys_get_temp_dir(), 'ran-origin-' );
+		self::assertIsString( $path );
+		$zip = new ZipArchive();
+		try {
+			self::assertTrue( $zip->open( $path, ZipArchive::OVERWRITE ) );
+			self::assertTrue( $zip->addEmptyDir( 'macos-dir' ) );
+			self::assertTrue( $zip->setExternalAttributesIndex( 0, ZipArchive::OPSYS_OS_X, ( 0040755 << 16 ) | 0x10 ) );
+			self::assertTrue( $zip->addFromString( 'macos-dir/main.php', '<?php' ) );
+			self::assertTrue( $zip->setExternalAttributesIndex( 1, ZipArchive::OPSYS_OS_X, 0100644 << 16 ) );
+			self::assertTrue( $zip->addFromString( 'macos-dir/link', 'target' ) );
+			self::assertTrue( $zip->setExternalAttributesIndex( 2, ZipArchive::OPSYS_OS_X, 0120777 << 16 ) );
+			self::assertTrue( $zip->addEmptyDir( 'ntfs-dir' ) );
+			self::assertTrue( $zip->setExternalAttributesIndex( 3, ZipArchive::OPSYS_WINDOWS_NTFS, 0x2010 ) );
+			self::assertTrue( $zip->addFromString( 'ntfs-dir/main.php', '<?php' ) );
+			self::assertTrue( $zip->setExternalAttributesIndex( 4, ZipArchive::OPSYS_WINDOWS_NTFS, 0x2020 ) );
+			self::assertTrue( $zip->addFromString( 'ntfs-dir/reparse', 'target' ) );
+			self::assertTrue( $zip->setExternalAttributesIndex( 5, ZipArchive::OPSYS_WINDOWS_NTFS, 0x0420 ) );
+			self::assertTrue( $zip->close() );
+
+			self::assertTrue( $zip->open( $path, ZipArchive::RDONLY ) );
+			try {
+				$expected = array(
+					0 => array( true, null ),
+					1 => array( false, null ),
+					2 => array( false, 'entry_type_special' ),
+					3 => array( true, null ),
+					4 => array( false, null ),
+					5 => array( false, 'entry_type_special' ),
+				);
+				foreach ( $expected as $index => [$directory, $reason] ) {
+					$origin     = null;
+					$attributes = null;
+					self::assertTrue( $zip->getExternalAttributesIndex( $index, $origin, $attributes ) );
+					self::assertSame( $reason, ArchiveSafety::entry_type_reason( $origin, $attributes, $directory ) );
+				}
+			} finally {
+				$zip->close();
+			}
+		} finally {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Remove the plain temporary ZIP fixture.
+			unlink( $path );
+		}
+	}
 }

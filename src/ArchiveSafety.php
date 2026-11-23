@@ -171,19 +171,22 @@ final class ArchiveSafety {
 		if ( null === $origin_os || null === $attributes ) {
 			return 'entry_metadata_unavailable';
 		}
-		if ( 3 === $origin_os ) {
+		if ( 3 === $origin_os || 19 === $origin_os ) {
 			$type = ( $attributes >> 16 ) & 0170000;
 			if ( ! in_array( $type, array( 0, 0040000, 0100000 ), true ) ) {
 				return 'entry_type_special';
 			}
 			return 0 === $type || ( 0040000 === $type ) === $directory ? null : 'entry_type_mismatch';
 		}
-		if ( 0 !== $origin_os ) {
+		if ( 0 !== $origin_os && 10 !== $origin_os ) {
 			return 'entry_origin_unsupported';
 		}
 		$flags = $attributes & 0xff;
 		if ( 0 !== ( $flags & 0x08 ) ) {
 			return 'entry_volume_label';
+		}
+		if ( 10 === $origin_os && 0 !== ( $attributes & ( 0x0040 | 0x0400 ) ) ) {
+			return 'entry_type_special';
 		}
 		return 0 === $flags || ( 0 !== ( $flags & 0x10 ) ) === $directory ? null : 'entry_type_mismatch';
 	}

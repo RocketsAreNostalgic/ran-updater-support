@@ -4,7 +4,7 @@
 
 `ArchiveSafety::path_failure()` validates ASCII relative paths by default, with one optional trailing slash. It can also validate UTF-8 paths when explicitly enabled. It rejects control and format characters, line and paragraph separators, traversal, empty components, Windows-reserved names, unsafe punctuation, trailing spaces or dots, and paths or components over the documented byte limits.
 
-`entry_type_reason()` accepts ZIP origin OS values DOS (`0`) and UNIX (`3`). UNIX accepts unspecified, regular, and directory modes. DOS accepts unspecified file flags or a matching directory bit and rejects volume labels. `collision_failure()` detects duplicate paths and files used as ancestors while allowing explicit or implicit directories.
+`entry_type_reason()` accepts ZIP origin OS values DOS (`0`), UNIX (`3`), Windows NTFS (`10`), and macOS / OS X (`19`). UNIX and macOS accept unspecified, regular, and directory modes. DOS and NTFS accept unspecified file flags or a matching directory bit and reject volume labels; NTFS also rejects reparse-point and device flags. `collision_failure()` detects duplicate paths and files used as ancestors while allowing explicit or implicit directories.
 
 ## Contract and usage
 
@@ -59,9 +59,9 @@ checking entry names, external attributes with `entry_type_reason()`,
 collisions and the actual decompressed stream at extraction.
 
 ZIP origin identifies the archive writer's attribute encoding, not the operating
-system currently running PHP. DOS upper bits are not interpreted as Unix mode.
-Missing metadata, unknown origins and contradictory file/directory metadata fail
-closed. Extending supported origin encodings requires evidence and fixtures.
+system currently running PHP. DOS and NTFS upper bits are not interpreted as Unix
+mode. Missing metadata, unknown origins and contradictory file/directory metadata
+fail closed. Extending supported origin encodings requires evidence and fixtures.
 See [ZIP APPNOTE sections 4.4.2 and 4.4.15](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT)
 and [Windows filename rules](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file).
 
@@ -102,13 +102,15 @@ name before or after a slash), `path_dot_segment` (`.` or `..`),
 Entry type reasons (`entry_type_reason()`, with the legacy code
 `entry_type_failure()` returns for each): `entry_metadata_unavailable` and
 `entry_type_mismatch` (contradictory file or directory metadata) map to
-`entry_metadata_invalid`; `entry_type_special` (symlink, device or other
-non-regular UNIX type), `entry_origin_unsupported` (ZIP origin other than DOS or
-UNIX) and `entry_volume_label` map to `entry_type_unsupported`.
+`entry_metadata_invalid`; `entry_type_special` (UNIX/macOS symlink, device or
+other non-regular mode, or NTFS reparse-point/device attribute),
+`entry_origin_unsupported` (ZIP origin other than DOS, UNIX, NTFS or macOS / OS X)
+and `entry_volume_label` map to `entry_type_unsupported`.
 
 Repository path reasons (`InvalidRepositoryPathException::reason()`):
-`path_control_character`, `path_empty`, `path_absolute`, `path_backslash`,
-`path_drive_letter`, `path_empty_component`, `path_dot_segment`,
+`path_too_long` (over 4,096 bytes), `path_control_character`, `path_empty`,
+`path_absolute`, `path_backslash`, `path_drive_letter`, `path_empty_component`,
+`path_dot_segment`, `component_too_long` (over 255 bytes),
 `path_encoded_traversal` (a percent-decoded segment is `.`, `..` or contains a
 slash or backslash), `path_encoded_drive_letter`,
 `path_encoded_control_character` and `path_decode_limit` (more than eight
@@ -124,8 +126,8 @@ It is pure PHP, with no filesystem or WordPress access.
 
 | Method | Contract |
 | --- | --- |
-| `is_valid_name( string $value ): bool` | Exactly 1–191 ASCII bytes: a letter or digit, followed by letters, digits, dots, underscores or hyphens. Capitals are allowed. No trimming or case folding. |
-| `installed_slug( string $package_type, string $identifier ): string` | For `plugin`, the last directory of the plugin file, or its filename without the extension for a single-file plugin. For `theme`, the stylesheet unchanged. Retains case; accepts consumer-validated WordPress identifiers, rather than validating identifier safety. Other package types throw `InvalidArgumentException`. |
+| `is_valid_name( string $value ): bool` | Exactly 1–191 ASCII bytes: a letter or digit, followed by letters, digits, dots, underscores or hyphens, with no trailing dot and no Windows reserved device name (`con`, `prn`, `aux`, `nul`, `com1`–`com9`, `lpt1`–`lpt9`, with or without a dot extension, ASCII case-insensitive), matching `ArchiveSafety::path_failure()`. Capitals are allowed. No trimming or case folding. |
+| `installed_slug( string $package_type, string $identifier ): string` | For `plugin`, the top-level directory of the plugin file, or its filename without the extension for a single-file plugin. For `theme`, the stylesheet unchanged. Retains case; accepts consumer-validated WordPress identifiers, rather than validating identifier safety. Other package types throw `InvalidArgumentException`. |
 | `normalize( mixed $value ): ?string` | Optional repository subdirectory: `null`, empty and space-only strings become `null`; other strings use `RepositoryRelativePath::normalize()`. Controls, including whitespace controls, and non-strings are rejected. |
 | `slug( mixed $value ): string` | Final segment of a normalized, required repository subdirectory, retaining case. |
 | `normalize_slug( mixed $value ): string` | Legacy provider-name normalization: one required repository path segment, with surrounding spaces trimmed and no trailing slash. |

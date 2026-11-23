@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once dirname( __DIR__ ) . '/src/ArchiveSafety.php';
 require_once dirname( __DIR__ ) . '/src/PackageDirectory.php';
 require_once dirname( __DIR__ ) . '/src/InvalidRepositoryPathException.php';
 require_once dirname( __DIR__ ) . '/src/RepositoryRelativePath.php';
@@ -9,24 +10,97 @@ require_once __DIR__ . '/fixtures/core-invalid-package-subdirectory.php';
 require_once __DIR__ . '/fixtures/core-package-subdirectory.php';
 require_once __DIR__ . '/fixtures/branch-package-subdirectory.php';
 
+use RAN\UpdaterSupport\V1\ArchiveSafety;
 use RAN\UpdaterSupport\V1\PackageDirectory;
 use RAN\UpdaterSupport\V1\Tests\CorePackageSubdirectory;
 use RAN\UpdaterSupport\V1\Tests\BranchPackageSubdirectory;
 
 ( static function (): void {
-	$checks = 0;
-	$check  = static function ( string $label, mixed $expected, mixed $actual ) use ( &$checks ): void {
+	$checks         = 0;
+	$check          = static function ( string $label, mixed $expected, mixed $actual ) use ( &$checks ): void {
 		++$checks;
 		if ( $expected !== $actual ) {
 			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Only synthetic contract labels enter this CLI diagnostic.
 			throw new RuntimeException( 'Package directory contract failed: ' . $label );
 		}
 	};
-	foreach ( array( 'plugin', 'MixedCaseTheme', 'A', '0', 'My.Plugin_2-', str_repeat( 'a', 100 ), str_repeat( 'A', 101 ), str_repeat( 'a', 191 ), str_repeat( 'A', 191 ) ) as $name ) {
-		$check( 'accepted folder name', true, PackageDirectory::is_valid_name( $name ) );
+	$accepted_names = array(
+		'plugin',
+		'MixedCaseTheme',
+		'A',
+		'0',
+		'My.Plugin_2-',
+		'com0',
+		'lpt0',
+		'com10',
+		'lpt10',
+		'console',
+		'null',
+		'auxiliary',
+		'con-plugin',
+		'con_plugin',
+		'aux1',
+		'my.con',
+		'plugin.nul',
+		'a.b',
+		str_repeat( 'a', 100 ),
+		str_repeat( 'A', 101 ),
+		str_repeat( 'a', 191 ),
+		str_repeat( 'A', 191 ),
+	);
+	foreach ( $accepted_names as $name ) {
+		$check( 'accepted folder name: ' . $name, true, PackageDirectory::is_valid_name( $name ) );
+		$check( 'accepted folder name passes ArchiveSafety: ' . $name, null, ArchiveSafety::path_failure( $name ) );
+		$check( 'accepted folder directory passes ArchiveSafety: ' . $name, null, ArchiveSafety::path_failure( $name . '/' ) );
 	}
-	foreach ( array( '', '.', '..', '.hidden', '_plugin', '-plugin', ' plugin', 'plugin ', 'two words', 'a/b', 'a\\b', 'a:b', '%41', "a\n", "\0a", "a\x7f", "caf\xc3\xa9", str_repeat( 'a', 192 ) ) as $name ) {
-		$check( 'rejected folder name', false, PackageDirectory::is_valid_name( $name ) );
+	$rejected_names = array(
+		'',
+		'.',
+		'..',
+		'.hidden',
+		'_plugin',
+		'-plugin',
+		' plugin',
+		'plugin ',
+		'two words',
+		'a/b',
+		'a\\b',
+		'a:b',
+		'%41',
+		"a\n",
+		"\0a",
+		"a\x7f",
+		"caf\xc3\xa9",
+		'a.',
+		'plugin.',
+		'My.Plugin.',
+		'my.plugin..',
+		'0.',
+		str_repeat( 'a', 190 ) . '.',
+		'con',
+		'CON',
+		'Con.php',
+		'con.a.b',
+		'con.',
+		'prn',
+		'PRN.txt',
+		'aux',
+		'AUX.tar.gz',
+		'nul',
+		'NUL',
+		'Nul.php',
+		'com1',
+		'COM2.dat',
+		'com9',
+		'COM1.',
+		'lpt1',
+		'LPT5.x',
+		'lpt9',
+		'LPT9.log',
+		str_repeat( 'a', 192 ),
+	);
+	foreach ( $rejected_names as $name ) {
+		$check( 'rejected folder name: ' . bin2hex( $name ), false, PackageDirectory::is_valid_name( $name ) );
 	}
 
 	// Capture the outward value or fixed failure message, allowing Core's exception subtype.
@@ -70,7 +144,10 @@ use RAN\UpdaterSupport\V1\Tests\BranchPackageSubdirectory;
 		array( 'plugin', 'single-plugin.php', 'single-plugin' ),
 		array( 'plugin', 'Single.Plugin.php', 'Single.Plugin' ),
 		array( 'plugin', '/MixedCasePlugin/Main.php/', 'MixedCasePlugin' ),
-		array( 'plugin', 'outer/Inner/Main.php', 'Inner' ),
+		array( 'plugin', 'a/b/main.php', 'a' ),
+		array( 'plugin', 'outer/Inner/Main.php', 'outer' ),
+		array( 'plugin', 'outer/mid/Inner/Main.php', 'outer' ),
+		array( 'plugin', '/outer/Inner/Main.php/', 'outer' ),
 		array( 'theme', 'installed-theme', 'installed-theme' ),
 		array( 'theme', 'MixedCaseTheme', 'MixedCaseTheme' ),
 	) as [$type, $identifier, $expected] ) {
