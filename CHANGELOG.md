@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.0-beta.11](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v1.0.0-beta.10...v1.0.0-beta.11) (2026-11-23)
+
+
+### Features
+
+* **archive:** add shared ZIP entry size and ratio validation ([#78](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/78)) ([f6f71ed](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/f6f71edc6d5578ccd4baa38e76a5f10c9136d2ac))
+* **primitives:** add UTF-8 support, ZIP policy and helpers ([#85](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/85)) ([1cd9f81](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/1cd9f81ce8e11c66e76e4b3086f89cb437059ee5))
+
+
+### Bug Fixes
+
+* **paths:** align PackageDirectory, path bounds and ZIP origins ([#86](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/86)) ([b150998](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/b15099887d4f83af0ace533301a010ed48c1f53a))
+* **paths:** skip working-copy probes for an empty target ([#79](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/79)) ([58200cc](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/58200ccc7b66aec4da652029f52a9ae45954f922))
+
 ## [1.0.0-beta.10](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v1.0.0-beta.9...v1.0.0-beta.10) (2026-11-19)
 
 
