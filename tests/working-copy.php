@@ -39,7 +39,7 @@ use RAN\UpdaterSupport\V1\TargetWorkingCopy;
 				} else {
 					symlink( 'dangling' === $ran_marker_type ? $ran_root . '/missing' : $ran_root, $ran_marker_path );
 				}
-				if ( ! TargetWorkingCopy::is_working_copy( $ran_target ) ) {
+				if ( ! TargetWorkingCopy::is_working_copy( $ran_target ) || ! TargetWorkingCopy::is_working_copy( $ran_target . '/' ) ) {
 					throw new RuntimeException( 'Marker not detected.' );
 				}
 				if ( 'directory' === $ran_marker_type ) {
@@ -48,6 +48,9 @@ use RAN\UpdaterSupport\V1\TargetWorkingCopy;
 				} else {
 					// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Isolated CLI filesystem fixture requires native operations.
 					unlink( $ran_marker_path );
+				}
+				if ( TargetWorkingCopy::is_working_copy( $ran_target ) || TargetWorkingCopy::is_working_copy( $ran_target . '/' ) ) {
+					throw new RuntimeException( 'Removed marker still detected from stale stat cache.' );
 				}
 			}
 		}

@@ -304,23 +304,46 @@ $legacy_entry_type_failure = static function ( ?int $origin_os, ?int $attributes
 	}
 	return 0 === $flags || ( 0 !== ( $flags & 0x10 ) ) === $directory ? null : 'entry_metadata_invalid';
 };
-$attribute_values          = array( null, 0, 1, 0x08, 0x10, 0x18, 0x20, 0xff, 0x100, 0x1ff, -1 );
+$attribute_values          = array( null, 0, 1, 0x08, 0x10, 0x18, 0x20, 0x0040, 0x0080, 0xff, 0x100, 0x1ff, 0x0400, 0x0410, 0x0420, 0x2010, 0x2020, -1 );
 foreach ( array( 0, 0010000, 0020000, 0040000, 0060000, 0100000, 0120000, 0140000, 0170000 ) as $mode_bits ) {
 	foreach ( array( 0, 0x10, 0x08, 0xff ) as $low ) {
 		$attribute_values[] = ( $mode_bits << 16 ) | $low;
 	}
 }
 $seen_entry_reasons = array();
-foreach ( array( null, -1, 0, 1, 2, 3, 4, 10, 19, 255, 256 ) as $origin ) {
+foreach ( array( null, -1, 0, 1, 2, 3, 4, 7, 10, 14, 19, 255, 256 ) as $origin ) {
 	foreach ( $attribute_values as $attributes ) {
 		foreach ( array( false, true ) as $directory ) {
 			$legacy          = $legacy_entry_type_failure( $origin, $attributes, $directory );
 			$reason          = ArchiveSafety::entry_type_reason( $origin, $attributes, $directory );
 			$current_failure = ArchiveSafety::entry_type_failure( $origin, $attributes, $directory );
-			if ( $current_failure !== $legacy ) {
+			if ( 19 === $origin ) {
+				$unix_failure = $legacy_entry_type_failure( 3, $attributes, $directory );
+				$unix_reason  = ArchiveSafety::entry_type_reason( 3, $attributes, $directory );
+				if ( $current_failure !== $unix_failure || $reason !== $unix_reason ) {
+					$fail( 'macOS origin_os 19 must match UNIX entry type rules' );
+				}
+			} elseif ( 10 === $origin ) {
+				if ( null === $attributes ) {
+					$expected_ntfs_reason = 'entry_metadata_unavailable';
+				} elseif ( 0 !== ( ( $attributes & 0xff ) & 0x08 ) ) {
+					$expected_ntfs_reason = 'entry_volume_label';
+				} elseif ( 0 !== ( $attributes & ( 0x0040 | 0x0400 ) ) ) {
+					$expected_ntfs_reason = 'entry_type_special';
+				} else {
+					$ntfs_flags           = $attributes & 0xff;
+					$expected_ntfs_reason = 0 === $ntfs_flags || ( 0 !== ( $ntfs_flags & 0x10 ) ) === $directory ? null : 'entry_type_mismatch';
+				}
+				if ( $reason !== $expected_ntfs_reason ) {
+					$fail( 'NTFS origin_os 10 entry_type_reason differs from the expected rule' );
+				}
+			} elseif ( $current_failure !== $legacy ) {
 				$fail( 'entry_type_failure differs from the legacy rule' );
 			}
-			if ( ( null === $reason ) !== ( null === $legacy ) ) {
+			$expected_failure = null === $reason
+				? null
+				: ( in_array( $reason, array( 'entry_metadata_unavailable', 'entry_type_mismatch' ), true ) ? 'entry_metadata_invalid' : 'entry_type_unsupported' );
+			if ( $current_failure !== $expected_failure ) {
 				$fail( 'entry_type_reason disagrees with entry_type_failure' );
 			}
 			if ( null !== $reason ) {
@@ -441,9 +464,21 @@ for ( $one = 0; $one < $repository_count; ++$one ) {
 		}
 	}
 }
+// Byte-length boundaries around the repository path and component limits.
+foreach ( array( 254, 255, 256, 257 ) as $length ) {
+	$repository_inputs[] = str_repeat( 'a', $length );
+	$repository_inputs[] = 'packages/' . str_repeat( 'a', $length );
+	$repository_inputs[] = 'packages/' . str_repeat( 'a', $length ) . '/';
+}
+foreach ( array( 4094, 4095, 4096, 4097, 4098 ) as $length ) {
+	$repository_inputs[] = $archive_bytes( $length );
+	$repository_inputs[] = $archive_bytes( $length - 1 ) . '/';
+	$repository_inputs[] = ' ' . $archive_bytes( $length - 2 ) . ' ';
+}
 $seen_repository_reasons = array();
 foreach ( $repository_inputs as $input ) {
-	$legacy = $legacy_repository_path( $input );
+	$legacy        = $legacy_repository_path( $input );
+	$caught_reason = null;
 	try {
 		$current = RepositoryRelativePath::normalize( $input );
 	} catch ( InvalidArgumentException $error ) {
@@ -452,7 +487,29 @@ foreach ( $repository_inputs as $input ) {
 			|| ! in_array( $error->reason(), InvalidRepositoryPathException::REASONS, true ) ) {
 			$fail( 'repository path rejection is not a fixed-message closed-reason exception' );
 		}
-		$seen_repository_reasons[ $error->reason() ] = true;
+		$caught_reason                             = $error->reason();
+		$seen_repository_reasons[ $caught_reason ] = true;
+	}
+	if ( strlen( $input ) > RepositoryRelativePath::MAX_PATH_BYTES ) {
+		if ( null !== $current || 'path_too_long' !== $caught_reason ) {
+			$fail( 'RepositoryRelativePath failed to reject an oversized path with path_too_long' );
+		}
+		continue;
+	}
+	if ( null !== $legacy ) {
+		$has_oversized_segment = false;
+		foreach ( explode( '/', $legacy ) as $segment ) {
+			if ( strlen( $segment ) > RepositoryRelativePath::MAX_COMPONENT_BYTES ) {
+				$has_oversized_segment = true;
+				break;
+			}
+		}
+		if ( $has_oversized_segment ) {
+			if ( null !== $current || 'component_too_long' !== $caught_reason ) {
+				$fail( 'RepositoryRelativePath failed to reject an oversized segment with component_too_long' );
+			}
+			continue;
+		}
 	}
 	if ( $legacy !== $current ) {
 		$fail( 'RepositoryRelativePath differs from the legacy accept/reject rule' );

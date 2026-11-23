@@ -4,15 +4,27 @@ declare(strict_types=1);
 
 return array(
 	'valid'   => array(
-		'single segment'       => array( 'plugin', 'plugin' ),
-		'nested path'          => array( 'packages/plugin', 'packages/plugin' ),
-		'outer whitespace'     => array( '  packages/plugin  ', 'packages/plugin' ),
-		'trailing separator'   => array( 'packages/plugin/', 'packages/plugin' ),
-		'percent literal'      => array( 'packages/percent%25name', 'packages/percent%25name' ),
-		'encoded colon'        => array( 'packages/C%3A-name', 'packages/C%3A-name' ),
-		'bounded decode depth' => array(
+		'single segment'                => array( 'plugin', 'plugin' ),
+		'nested path'                   => array( 'packages/plugin', 'packages/plugin' ),
+		'outer whitespace'              => array( '  packages/plugin  ', 'packages/plugin' ),
+		'trailing separator'            => array( 'packages/plugin/', 'packages/plugin' ),
+		'percent literal'               => array( 'packages/percent%25name', 'packages/percent%25name' ),
+		'encoded colon'                 => array( 'packages/C%3A-name', 'packages/C%3A-name' ),
+		'bounded decode depth'          => array(
 			'packages/%' . str_repeat( '25', 7 ) . '41',
 			'packages/%' . str_repeat( '25', 7 ) . '41',
+		),
+		'component 255'                 => array(
+			'packages/' . str_repeat( 'a', 255 ),
+			'packages/' . str_repeat( 'a', 255 ),
+		),
+		'path 4096'                     => array(
+			str_repeat( str_repeat( 'a', 255 ) . '/', 15 ) . str_repeat( 'a', 254 ) . '/a',
+			str_repeat( str_repeat( 'a', 255 ) . '/', 15 ) . str_repeat( 'a', 254 ) . '/a',
+		),
+		'path 4096 with trailing slash' => array(
+			str_repeat( str_repeat( 'a', 255 ) . '/', 16 ),
+			str_repeat( str_repeat( 'a', 255 ) . '/', 15 ) . str_repeat( 'a', 255 ),
 		),
 	),
 	'invalid' => array(
@@ -40,5 +52,8 @@ return array(
 		'double encoded control'      => 'packages/plug%2500in',
 		'decode depth exceeded'       => 'packages/%' . str_repeat( '25', 8 ) . '41',
 		'double trailing separator'   => 'packages/plugin//',
+		'component 256'               => 'packages/' . str_repeat( 'a', 256 ),
+		'path 4097'                   => str_repeat( str_repeat( 'a', 255 ) . '/', 16 ) . 'a',
+		'space padded path 4097'      => ' ' . str_repeat( str_repeat( 'a', 255 ) . '/', 15 ) . str_repeat( 'a', 255 ) . ' ',
 	),
 );

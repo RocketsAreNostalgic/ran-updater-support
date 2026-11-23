@@ -18,12 +18,13 @@ return array(
 	'entry_types'      => array(
 		// Each case is origin, attributes, directory.
 		'entry_metadata_unavailable' => array( array( null, 0, false ), array( 3, null, false ), array( null, null, true ) ),
-		'entry_type_mismatch'        => array( array( 3, 0100644 << 16, true ), array( 3, 0040755 << 16, false ), array( 0, 0x10, false ), array( 0, 0x20, true ) ),
-		'entry_type_special'         => array( array( 3, 0120777 << 16, false ), array( 3, 0020666 << 16, false ), array( 3, 0060660 << 16, false ) ),
-		'entry_origin_unsupported'   => array( array( 1, 0, false ), array( 10, 0x10, true ), array( 255, 0, false ) ),
-		'entry_volume_label'         => array( array( 0, 0x08, false ), array( 0, 0x18, true ) ),
+		'entry_type_mismatch'        => array( array( 3, 0100644 << 16, true ), array( 3, 0040755 << 16, false ), array( 19, 0100644 << 16, true ), array( 19, 0040755 << 16, false ), array( 0, 0x10, false ), array( 0, 0x20, true ), array( 10, 0x10, false ), array( 10, 0x20, true ), array( 10, 0x80, true ) ),
+		'entry_type_special'         => array( array( 3, 0120777 << 16, false ), array( 3, 0020666 << 16, false ), array( 3, 0060660 << 16, false ), array( 19, 0120777 << 16, false ), array( 10, 0x0400, false ), array( 10, 0x0410, true ), array( 10, 0x0420, false ), array( 10, 0x0040, false ) ),
+		'entry_origin_unsupported'   => array( array( 1, 0, false ), array( 7, 0, false ), array( 14, 0x10, true ), array( 255, 0, false ) ),
+		'entry_volume_label'         => array( array( 0, 0x08, false ), array( 0, 0x18, true ), array( 10, 0x08, false ), array( 10, 0x18, true ) ),
 	),
 	'repository_paths' => array(
+		'path_too_long'                  => array( str_repeat( 'a/', 2048 ) . 'a', ' ' . str_repeat( str_repeat( 'a', 255 ) . '/', 15 ) . str_repeat( 'a', 255 ) . ' ' ),
 		'path_control_character'         => array( "packages/plug\0in", "\tpackages", "packages\n" ),
 		'path_empty'                     => array( '', '   ' ),
 		'path_absolute'                  => array( '/packages' ),
@@ -31,6 +32,7 @@ return array(
 		'path_drive_letter'              => array( 'C:/packages', 'z:' ),
 		'path_empty_component'           => array( 'packages//plugin', 'packages/plugin//' ),
 		'path_dot_segment'               => array( 'packages/./plugin', '..', 'packages/../plugin' ),
+		'component_too_long'             => array( 'packages/' . str_repeat( 'a', 256 ), str_repeat( 'a', 256 ) ),
 		'path_encoded_traversal'         => array( 'packages/%2e%2e', 'packages/%252e', 'packages%2fplugin', 'packages%5cplugin', '%2e' ),
 		'path_encoded_drive_letter'      => array( 'C%3A/packages', '%43:/packages', 'C%253A/packages' ),
 		'path_encoded_control_character' => array( 'packages/plug%00in', 'packages/plug%2500in', 'packages/%0a' ),
