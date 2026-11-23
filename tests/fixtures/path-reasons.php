@@ -7,13 +7,13 @@ return array(
 		'path_empty'                      => array( '' ),
 		'path_too_long'                   => array( str_repeat( 'a/', 2048 ) . 'a' ),
 		'path_absolute'                   => array( '/plugin/main.php' ),
-		'path_control_character'          => array( "plugin/\x00main.php", "plugin/\nmain.php", "plugin/\x7fmain.php" ),
-		'path_unsafe_character'           => array( "plugin/\xc3\xa9.php", "plugin/\x80.php", 'plugin\\main.php', 'C:/plugin', 'a<b', 'a|b', 'a*b', 'a?b', 'a"b' ),
+		'path_control_character'          => array( "plugin/\x00main.php", "plugin/\nmain.php", "plugin/\x7fmain.php", "plugin/\u{0085}.php", "plugin/\u{200D}.php", "plugin/\u{202E}.php", "plugin/\u{2028}.php" ),
+		'path_unsafe_character'           => array( "plugin/\x80.php", "plugin/\xed\xa0\x80.php", 'plugin\\main.php', 'C:/plugin', 'a<b', 'a|b', 'a*b', 'a?b', 'a"b', 'plugin/画像?.svg' ),
 		'path_empty_component'            => array( 'plugin//main.php', 'plugin//', 'plugin///x/' ),
 		'path_dot_segment'                => array( './plugin', 'plugin/../main.php', 'plugin/./main.php', 'plugin/..', '..' ),
 		'component_too_long'              => array( 'plugin/' . str_repeat( 'a', 256 ) ),
 		'component_trailing_dot_or_space' => array( 'plugin/main.', 'plugin/main ', 'plugin./main' ),
-		'component_reserved_name'         => array( 'plugin/con', 'plugin/NUL.txt', 'plugin/Aux.tar.gz', 'plugin/com1', 'plugin/lpt9.log' ),
+		'component_reserved_name'         => array( 'plugin/con', 'plugin/NUL.txt', 'plugin/Aux.tar.gz', 'plugin/com1', 'plugin/lpt9.log', 'plugin/COM¹.png', 'plugin/lPt³' ),
 	),
 	'entry_types'      => array(
 		// Each case is origin, attributes, directory.

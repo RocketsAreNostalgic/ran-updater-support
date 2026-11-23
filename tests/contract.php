@@ -78,7 +78,7 @@ foreach ( $repository_paths['invalid'] as $name => $input ) {
 	throw new RuntimeException( "unsafe repository-relative path fixture was accepted: {$name}" );
 }
 
-// Reasons: closed vocabularies, one fixture per reason, and unchanged accept/reject behaviour.
+// Reasons: closed vocabularies, legacy ASCII behavior and new UTF-8 admission.
 $fail    = static function ( string $message ): never {
 	// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- dependency-free CLI contract failure only.
 	throw new RuntimeException( $message );
@@ -97,7 +97,7 @@ if ( array_keys( $reasons['archive_paths'] ) !== ArchiveSafety::PATH_FAILURES ) 
 	$fail( 'path reason vocabulary and fixtures differ' );
 }
 
-// Legacy normalize_path, frozen verbatim as the equivalence reference.
+// Legacy normalize_path, frozen verbatim as the ASCII and malformed-input equivalence reference.
 $legacy_normalize_path = static function ( string $name ): ?array {
 	if (
 		'' === $name || strlen( $name ) > 4096 || str_starts_with( $name, '/' )
@@ -224,10 +224,10 @@ foreach ( $archive_names as $name ) {
 	$legacy  = $legacy_normalize_path( $name );
 	$current = ArchiveSafety::normalize_path( $name );
 	$reason  = ArchiveSafety::path_failure( $name );
-	if ( $legacy !== $current ) {
+	if ( $legacy !== $current && ( null !== $legacy || 1 !== preg_match( '/[^\x00-\x7f]/u', $name ) ) ) {
 		$fail( 'normalize_path differs from the legacy rule for a corpus name' );
 	}
-	if ( ( null === $reason ) !== ( null !== $legacy ) ) {
+	if ( ( null === $reason ) !== ( null !== $current ) ) {
 		$fail( 'path_failure disagrees with normalize_path for a corpus name' );
 	}
 	if ( null !== $reason ) {

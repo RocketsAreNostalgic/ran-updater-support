@@ -43,6 +43,7 @@ declare(strict_types=1);
 		$mutants[ $name ] = array( 'replace' => array( 'self::' . $calls[1][ $index ] . '( $text )' => 'false' ) );
 	}
 	$mutants['printable_ascii_only']    = array( 'replace' => array( "! self::test( '#\\A[\\x20-\\x7E]+\\z#', \$text )" => 'false' ) );
+	$mutants['printable_utf8_only']     = array( 'replace' => array( "! self::test( '#\\A[^\\p{C}\\p{Zl}\\p{Zp}]+\\z#u', \$text )" => 'false' ) );
 	$mutants['bound_before_screening']  = array( 'replace' => array( "'' === \$text || self::hostile( \$text, \$prose )" => "'' === \$text || self::hostile( substr( \$text, 0, \$max_length ), \$prose )" ) );
 	$mutants['strict_applies_prose']    = array( 'replace' => array( 'return self::screen( $text, $max_length, true );' => 'return self::screen( $text, $max_length, false );' ) );
 	$mutants['display_skips_prose']     = array( 'replace' => array( 'return self::screen( $text, $max_length, false );' => 'return self::screen( $text, $max_length, true );' ) );
@@ -52,7 +53,14 @@ declare(strict_types=1);
 	$mutants['input_length_cap']        = array( 'replace' => array( ' || strlen( $text ) > self::MAX_INPUT_LENGTH' => '' ) );
 	$mutants['bound_lower_limit']       = array( 'replace' => array( '$max_length < 1 || ' => '' ) );
 	$mutants['bound_upper_limit']       = array( 'replace' => array( '$max_length > self::MAX_INPUT_LENGTH || ' => '' ) );
-	$mutants['empty_result_check']      = array( 'replace' => array( "'' === \$text || self::hostile( \$text, \$prose )" => 'self::hostile( $text, $prose )' ) );
+	$mutants['empty_result_check']      = array(
+		'replace' => array(
+			"'' === \$text || self::hostile( \$text, \$prose )" => 'self::hostile( $text, $prose )',
+			"'' === \$bounded || ( \$bounded !== \$text && self::hostile( \$bounded, \$prose ) )" => '( $bounded !== $text && self::hostile( $bounded, $prose ) )',
+		),
+	);
+	$mutants['display_slash_policy']    = array( 'replace' => array( "\$pattern = '#(?:\\A|/) *(?:/|\\z)|(?<! )/|/(?! )#';" => "\$pattern = '#/#';" ) );
+	$mutants['unicode_space_screening'] = array( 'replace' => array( "self::replace( '#\\p{Zs}#u', ' ', \$text )" => '$text' ) );
 	$mutants['commit_id_end_anchor']    = array( 'replace' => array( ')\z#' => ')$#' ) );
 	$mutants['commit_id_start_anchor']  = array( 'replace' => array( "'#\\A(?:[0-9a-f]{40}" => "'#(?:[0-9a-f]{40}" ) );
 	$mutants['commit_id_lowercase']     = array( 'replace' => array( '[0-9a-f]{40}|[0-9a-f]{64}' => '[0-9a-fA-F]{40}|[0-9a-fA-F]{64}' ) );

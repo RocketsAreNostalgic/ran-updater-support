@@ -81,4 +81,31 @@ final class WordPressHeadersTest extends TestCase {
 		self::assertSame( array( 'Version' => array( '1' ) ), WordPressHeaders::parse( $padding . $header . "\nVersion:2", $labels ) );
 		self::assertSame( array(), WordPressHeaders::parse( $padding . "ignored\n" . $header, $labels ) );
 	}
+
+	public function test_reads_the_current_local_header_within_the_byte_window(): void {
+		$path = tempnam( sys_get_temp_dir(), 'ran-header-' );
+		self::assertIsString( $path );
+		$labels = array(
+			'Name'    => 'Theme Name',
+			'Version' => 'Version',
+		);
+		try {
+			self::assertSame( array(), WordPressHeaders::read( $path, $labels ) );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Write a local installed-header fixture.
+			file_put_contents( $path, "/* Theme Name: Café */\nVersion: 0\n" . str_repeat( ' ', 8192 ) . "\nVersion: 1" );
+			self::assertSame(
+				array(
+					'Name'    => array( 'Café' ),
+					'Version' => array( '0' ),
+				),
+				WordPressHeaders::read( $path, $labels )
+			);
+			self::assertNull( WordPressHeaders::read( dirname( $path ), $labels ) );
+			self::assertNull( WordPressHeaders::read( 'file://' . $path, $labels ) );
+		} finally {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Remove only the local header fixture.
+			unlink( $path );
+		}
+		self::assertNull( WordPressHeaders::read( $path, $labels ) );
+	}
 }

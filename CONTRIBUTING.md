@@ -174,15 +174,13 @@ branch updater and the release updater; the policy and rule list are in the
   only rejection of an entry. A mutant no input can distinguish is listed with its
   reason in `$equivalent`; an unexplained survivor fails the check.
 - Prefer widening a rule to adding a concept. The screener stays one class of
-  pure static functions: no state, no WordPress or extension dependency, printable
-  ASCII output, no redaction. The three screening modes (`strict`, `display`,
-  `identifier`) differ only in the prose credential-word rules and the identifier
-  shape; a shape rule belongs in the shared table so every mode applies it, and a
-  prose-word rule belongs in `PROSE_RULES`. Keep exactly one occurrence of the
+  pure static functions without WordPress, additional extensions, or redaction.
+  Keep shared credential patterns in the shared table and strict-only prose
+  rules in `PROSE_RULES`. Preserve the mode-specific character and slash
+  limits. Keep exactly one occurrence of the
   namespace string in the file: the release updater generates a namespace-rewritten
-  vendored copy and refuses any other shape. Avoid end-anchored patterns, so a
-  bounded prefix of accepted text is always itself acceptable (the property tests
-  check this).
+  vendored copy and refuses any other shape. The property tests check that bounded
+  output remains valid and that a prefix which fails screening is dropped.
 - False positives are accepted, false negatives are not. When a benign string is
   dropped, record it in the README list rather than loosening a rule unless a
   consumer cannot work around it with its closed reason code.

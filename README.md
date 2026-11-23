@@ -1,10 +1,10 @@
 # RAN Updater Support
 
-`ran/updater-support` provides shared contracts and utilities for RAN updater packages. Its first component is a pure PHP 8.2 archive-safety contract. This component performs no ZIP, filesystem, network, or custody work. The shared failure-text screener, `FailureText`, is its second component.
+`ran/updater-support` provides shared archive, failure-text, and local file primitives for RAN updater packages. The library supports PHP 8.2 and later 8.x releases without WordPress. Archive policy evaluates the metadata supplied by the caller.
 
-`ArchiveSafety::normalize_path()` accepts printable ASCII relative paths with one optional trailing slash. It rejects traversal, empty components, Windows-reserved names, unsafe punctuation, trailing spaces or dots, and paths or components over the documented byte limits.
+`ArchiveSafety::normalize_path()` accepts valid UTF-8 relative paths with one optional trailing slash. It rejects control and format characters, line and paragraph separators, traversal, empty components, Windows-reserved names, unsafe punctuation, trailing spaces or dots, and paths or components over the documented byte limits. It preserves admitted names byte for byte.
 
-`entry_type_failure()` accepts only ZIP origin OS values DOS (`0`) and UNIX (`3`). Unknown origins are rejected because the package does not guess external-attribute semantics. UNIX accepts unspecified, regular, and directory modes; DOS accepts unspecified file flags or a matching directory bit, and rejects volume labels. `collision_failure()` detects case-insensitive duplicate paths and files used as ancestors while allowing explicit or implicit directories.
+`entry_type_reason()` accepts ZIP origin OS values DOS (`0`) and UNIX (`3`). UNIX accepts unspecified, regular, and directory modes. DOS accepts unspecified file flags or a matching directory bit and rejects volume labels. `collision_failure()` detects duplicate paths and files used as ancestors while allowing explicit or implicit directories.
 
 ## Contract and usage
 
@@ -21,7 +21,7 @@ if ($entry === null) {
     throw new InvalidArgumentException('Unsafe archive path.');
 }
 
-$failure = ArchiveSafety::entry_type_failure(
+$failure = ArchiveSafety::entry_type_reason(
     origin_os: 3,
     attributes: 0100644 << 16,
     directory: false,
@@ -34,10 +34,26 @@ $collision = ArchiveSafety::collision_failure([
 ```
 
 Only pass successfully normalized entry facts to `collision_failure()`. It returns
-`path_duplicate`, `file_parent_collision`, or `null`. Metadata validation returns
-`entry_metadata_invalid`, `entry_type_unsupported`, or `null`; unavailable
-metadata differs from valid zero attributes. Consumers retain their own outward
-error codes. Case folding is deterministic because admitted names are ASCII.
+`path_duplicate`, `file_parent_collision`, or `null`. Collision checks fold
+ASCII case and compare other bytes exactly. The extractor owns any additional
+case or normalization equivalences on its destination filesystem.
+
+### Shared ZIP policy
+
+Start with `ArchiveSafety::entry_count_failure($zip->numFiles)` to admit 1 to
+10,000 entries. Set the remaining expanded budget with
+`ArchiveSafety::maximum_expanded_bytes($maximum_artifact_bytes)`. It returns
+four times the artifact limit and throws `InvalidArgumentException` for
+nonpositive or overflowing limits.
+
+For each entry, pass its `statIndex()` array, the directory flag from its
+normalized path and the remaining budget to
+`ArchiveSafety::entry_policy_failure($stat, $directory, $remaining)`. This
+requires integer size and encryption metadata, accepts `ZipArchive::EM_NONE`,
+rejects directory payloads and enforces a 100:1 ratio from 128 KiB upward.
+After admission, subtract the declared size from the remaining budget. Continue
+checking entry names, external attributes with `entry_type_reason()`,
+collisions and the actual decompressed stream at extraction.
 
 ZIP origin identifies the archive writer's attribute encoding, not the operating
 system currently running PHP. DOS upper bits are not interpreted as Unix mode.
@@ -50,10 +66,8 @@ and [Windows filename rules](https://learn.microsoft.com/en-us/windows/win32/fil
 
 `ArchiveSafety::path_failure()`, `ArchiveSafety::entry_type_reason()` and
 `InvalidRepositoryPathException::reason()` say which rule rejected an input. They
-are additive: `normalize_path()`, `entry_type_failure()`, `collision_failure()`
-and `RepositoryRelativePath::normalize()` accept and reject exactly what they did
-before, `entry_type_failure()` and `collision_failure()` still return only their
-documented codes, and the exception message is unchanged.
+return fixed reason codes. Existing callers can continue using
+`entry_type_failure()` with its two legacy codes.
 
 Guarantees, stated precisely:
 
@@ -74,8 +88,9 @@ Guarantees, stated precisely:
 
 Archive path reasons (`path_failure()`, checked in this order): `path_empty`,
 `path_too_long` (over 4,096 bytes), `path_absolute` (leading slash),
-`path_control_character`, `path_unsafe_character` (non-printable or non-ASCII
-byte, or one of `\ : < > " | ? *`), `path_empty_component` (a `//`, or an empty
+`path_control_character` (control, format, line or paragraph separator),
+`path_unsafe_character` (malformed UTF-8 or one of `\ : < > " | ? *`),
+`path_empty_component` (a `//`, or an empty
 name before or after a slash), `path_dot_segment` (`.` or `..`),
 `component_too_long` (over 255 bytes), `component_trailing_dot_or_space`,
 `component_reserved_name` (Windows device name, with or without extension).
@@ -241,6 +256,20 @@ over a name corpus with case variants.
   comment prefixes and terminators, including a compact `<?php/**` opening.
   Callers decide which fields are required, how to handle duplicates, and what
   values to admit.
+- **`WordPressHeaders::read($path, $labels)`** performs one bounded local header
+  read on demand and passes the bytes to the same parser. An unavailable or
+  non-regular file returns `null`. A readable file with no matching labels
+  returns an empty array. The caller resolves the installed file and checks
+  containment and package identity.
+- **`TemporaryArchive::with_archive($allocate, $acquire, $consume, $limit, $sha256, $size)`**
+  scopes a local archive to one synchronous operation. The allocator supplies a
+  fresh empty file in a trusted directory, such as a path from `wp_tempnam()`
+  in a WordPress adapter. The acquisition callback writes in place and enforces
+  the byte limit during transfer. The helper checks the result size, computes
+  SHA-256 in one bounded pass, and verifies any supplied expected digest and
+  size. The consume callback receives the path, digest and size for inspection
+  and handoff. Cleanup runs on success or failure and reports an error if the
+  owned path cannot be cleared. Keep archive use inside the callback.
 - **`RuntimeVersion::php($value)`** and **`RuntimeVersion::wordpress($value)`**
   return a three-part runtime version with a normalized prerelease if present,
   or `null` for an unrecognized input. For example, `8.2.0-ubuntu1` becomes
@@ -285,14 +314,13 @@ $exact    = FailureText::strict( $text, 255 ) === $text; // validating sinks: re
 
 ### Modes
 
-One rule set, three explicit ways to apply it. Every mode drops non-ASCII text, and
-every shape rule below applies to every mode; the modes differ only in whether prose
-about credentials is treated as a credential. Pick the mode by where the text comes from.
+Pick the mode by where the text comes from. The modes share secret-shape
+screening and have separate text admission rules.
 
 | Method | Input | Applies | Bound | Used for |
 | --- | --- | --- | --- | --- |
 | `strict( $text, $max )` | untrusted free-text detail from a foreign package | every shape rule and the prose credential-word rules | caller supplies, small (updaters use 64 to 120) | updater rejection and failure detail (release updater, branch updater); any logger value that is not an identifier or commit id |
-| `display( $text, $max )` | curated sentences Core shows | shape rules only; no prose-word rule; full sentences with spaces and punctuation | caller supplies, longer (Core uses 255 to 512) | Core provider diagnostics, webhook remediation, activity text |
+| `display( $text, $max )` | curated sentences Core shows | printable UTF-8 with shape screening and space-delimited slash separators | caller supplies, longer (Core uses 255 to 512) | Core provider diagnostics, webhook remediation, activity text |
 | `identifier( $text )` | a closed id | exactly `[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*`, at most 96 bytes, and not hostile by any shape rule; never truncated | 96 | diagnostic ids and reason codes, snake_case, dotted or dashed (`ran_booster_storage_transaction_unavailable`, `token_expired`, `gh.credential.valid`, `webhook.operation_succeeded`, `github-fine-grained-pat-v1`); logger identifier values |
 | `commit_id( $text )` | a resolved ref | exactly 40 or 64 lowercase hex digits | fixed | commit ids kept by Core's logger |
 
@@ -316,7 +344,9 @@ The policy, stated precisely:
 - **Closed result.** `strict()` and `display()` return a `string` or `null`. A caller-supplied
   `$max_length` outside 1 to `FailureText::MAX_INPUT_LENGTH` (4,096) returns
   `null`, as does empty text and text longer than 4,096 bytes.
-- **Printable ASCII only.** Output is bytes `0x20` to `0x7E`.
+- **Byte bounds.** `strict()` and `identifier()` output printable ASCII.
+  `display()` trims an incomplete UTF-8 code point at the byte boundary and
+  returns `null` if no text fits.
 - **Not a proof.** The screen is by shape. Sinks must still prefer fixed or
   provider-public text, and consumers must escape the result on output. Encodings
   the rules do not name (a secret re-spelled in a new alphabet, or an unlisted
@@ -324,16 +354,11 @@ The policy, stated precisely:
 
 ### Unicode
 
-All non-ASCII input is dropped: any byte at or above `0x80`, so every control,
-format, invisible, bidirectional, separator, combining, homoglyph or
-fullwidth character, and invalid UTF-8, with no normalization attempted. The
-alternative (accept some Unicode after NFKC or a property allowlist) was rejected
-because normalization is where hostile separators and look-alikes hide
-(`https：//`, zero-width separators inside digests), it needs an extension the
-package does not assume, and the failure text these packages show is fixed
-English or ASCII provider text. Legitimate non-ASCII text (`café`) is dropped;
-that false positive is accepted. Controls, including tab, CR, LF, NUL and DEL,
-are dropped, not collapsed to spaces.
+`display()` accepts translated prose and typographic punctuation. Malformed
+UTF-8, Unicode Other characters (including controls and format characters) and
+line and paragraph separators cause rejection. Shape matching treats Unicode
+space separators as spaces and preserves them in returned text. A forward
+slash must have space on both sides and separate nonempty text.
 
 ### Rules
 
@@ -342,12 +367,12 @@ by `tests/failure-text-mutation.php`.
 
 | Group | Dropped | Rule names |
 | --- | --- | --- |
-| Characters | anything outside printable ASCII | `printable_ascii_only` |
+| Characters | anything outside printable ASCII in STRICT and IDENTIFIER, or outside printable UTF-8 in DISPLAY | `printable_ascii_only`, `printable_utf8_only` |
 | Markup | `<` `>` `&` (tags and entity forms), `{` `}` `[` `]`, `` ` ``, `\|`, and a `;` directly followed by text (`a;b`; a `;` before a space or at the end is prose punctuation) | `angle_bracket`, `ampersand`, `bracket_or_brace`, `backtick`, `pipe`, `semicolon` |
 | Assignments | any `=` (query strings, `name=value`, `sha256=`, DSNs) | `equals` |
 | Userinfo | any `@` (userinfo, email, `git@host:`), any `%XX` escape (`%40`, `%2e`) | `at_sign`, `percent_escape` |
 | URLs | a colon or question mark attached to the next character (`https://`, `mailto:a`, `a:b`, `?token`), except inside a clock time (below); a scheme word then a colon even with spaces (`https :`) | `colon_attached`, `question_attached`, `url_scheme_word` |
-| Paths | any `/`, `\` or `~`; `wp-content`, `wp-admin`, `wp-includes`, `.htaccess`, `.htpasswd`, `public_html`; WordPress and PHP session cookie names; private-key headers | `slash`, `backslash`, `tilde`, `wordpress_path_word`, `session_cookie_name`, `private_key_material` |
+| Paths | `/` except as a DISPLAY separator, any `\` or `~`; `wp-content`, `wp-admin`, `wp-includes`, `.htaccess`, `.htpasswd`, `public_html`; WordPress and PHP session cookie names; private-key headers | `slash`, `display_slash_policy`, `backslash`, `tilde`, `wordpress_path_word`, `session_cookie_name`, `private_key_material` |
 | Credential words (STRICT only) | `password` (and `passw0rd`), `passwd`, `pwd`, `passphrase`, `passcode`, `pass`, `pw`, `passwort`, `jwt`, `auth`, `key is`, `pin is`, `access key`, `secret`, `token`, `api key`, `apikey`, `authorization` or `authorisation`, `signature`, `nonce`, `cookie`, `credential` (and plurals) with any other word or text before or after it, inside a longer word or across an underscore (`usertoken x`, `client_secret x`) but not before a letter (`tokenizer`); the word on its own (`token`, `api keys`) passes. `Basic` or `Bearer` followed by any text | `credential_*`, `credential_other`, `bearer_or_basic` |
 | Clock times (exempt from the attached-colon rule) | `HH:MM` and `HH:MM:SS` (hour 0 to 23, minutes and seconds 00 to 59), alone or with `Z` or a UTC offset such as `+00:00`, `+0000` or `-05:30`, and the time after the `T` of an ISO date: `received 12:00`, `at 09:05:59`, `2026-08-13 12:00:00`, `2026-08-13T12:00:00Z`. The time must not follow a letter, digit, colon, dot, plus or hyphen and must not be followed by a letter, digit, colon or slash, so `12:30pm`, `12:00:00:00:00`, `2026-08-13 12:00:00:abc`, `x:12:34`, `password:12:34`, `1:2:3:4`, `aa:bb:cc:dd` and MAC or IPv6 shapes still drop | `colon_attached` (with `CLOCK_TIME`) |
 | Credential header name (every mode) | a known credential header name directly followed by a colon, any case, spaces allowed before it: `Authorization`/`Authorisation`, `Proxy-Authorization`, `WWW-Authenticate`, `api-key`, `Cookie`, `Set-Cookie`, `X-WP-Nonce`, and any `x-` header whose name holds `key`, `token`, `secret`, `auth`, `password` or `signature` (`X-API-Key`, `X-Auth-Token`, `X-Access-Token`, `X-CSRF-Token`, `X-XSRF-Token`, `X-Foo-Secret`): `Authorization: Bearer abcdefgh`, `X-API-Key: abcdefgh`. `Note: check the settings.` and `Check the token permissions and organisation approval.` are not headers | `credential_header_name`, `credential_header_generic` |
@@ -367,10 +392,9 @@ dropped benign sentence only costs a less specific message, because callers keep
 the closed reason code. Every rule is therefore deliberately broad. Benign text
 that is now dropped, so callers must not rely on it:
 
-- any text containing `/`, `\`, `~`, `=`, `@`, `|`, `&`, `<`, `>`, brackets or
-  braces, or a `;` directly followed by text: `TCP/IP`, `and/or`, `R&D`, `a=b`,
-  `[error]`, `a;b`. Admin copy must use ASCII and avoid `/`: curly quotes, arrows
-  and ellipses are dropped, and so are phrases such as `owner/repository`;
+- attached slashes such as `TCP/IP`, `and/or` and `owner/repository`, and text
+  containing `\`, `~`, `=`, `@`, `|`, `&`, `<`, `>`, brackets or braces, or a
+  `;` directly followed by text, as in `R&D`, `a=b`, `[error]` and `a;b`;
 - a sentence that puts a credential header name directly before a colon (`Cookie: theme is dark`, `Set a cookie: it expires soon`, `Key` alone before a colon is fine);
 - a colon or question mark followed directly by text, other than a clock time: `12:30pm`, `ratio 3:1`, `12:00: done`,
   `Error:x`, `what?now`, a time with a fractional-seconds colon or a trailing colon;
@@ -386,7 +410,7 @@ that is now dropped, so callers must not rely on it:
   `underpass`, `trespass`, `encompass`, `surpass` and about 30 more are dropped by
   `strict()` even alone, as are `OAuth` and `1password`; `passenger` and `tokenizer`
   still pass;
-- non-ASCII text, any run of 25 or more letters and digits, and any text holding
+- non-ASCII text in STRICT or IDENTIFIER, any run of 25 or more ASCII letters and digits, and any text holding
   `AKIA`, `ASIA`, `eyJ`, `sk-` or `npm_` (`ASIAN`, long CamelCase names, `task-force`,
   `disk-full`), because token prefixes drop at any position;
 - runs of space-separated CamelCase or letter-and-digit words that total 20 or more
@@ -409,15 +433,10 @@ content the package does not control needs `strict()`.
 
 ### Language stance
 
-The screener is English and ASCII by design. Core's own translated copy (`__()`)
-never passes through it. Provider-authored fixed text that goes through `display()` must
-be English ASCII, and non-ASCII text is dropped whole, so a translated string fails
-closed rather than being half-screened. Failures are made translatable by the closed
-reason vocabulary, mapped to Core-owned translatable copy, not by screening translated
-text. The credential-word rules are an English best-effort extra (both `authorization`
-and `authorisation`, and their plurals; no other languages) and are not the guarantee:
-the shape rules and closed call-site values are. Free text from third parties is best
-effort.
+Use `display()` for curated translations, including fixed provider messages.
+Keep the closed reason vocabulary so callers can supply their own translated
+fallbacks. The credential-word rules in `strict()` recognize English terms
+and selected variants.
 
 ### Scope and limits
 
@@ -426,10 +445,8 @@ effort.
   or `WP_Error` message, a header value, a publisher string. That text needs `strict()`,
   or no text at all and a closed reason code. `display()` omits the prose
   credential-word rule precisely because the caller vouches that the sentence is curated.
-- **Engine failures fail closed.** Every regular expression goes through one helper.
-  If the engine fails (a backtrack or JIT stack limit, `preg_last_error()` set), the
-  public method returns `null`; a failure is never read as "no match". A test runs
-  the corpus under starved limits and requires every hostile string to be dropped.
+- **Engine failures fail closed.** A screening error such as a backtrack or
+  JIT stack limit drops the whole text. The corpus also runs under starved limits.
 - **Input.** The public methods accept `?string` and return `null` for `null`. Anything
   else is a type error under `strict_types`.
 - **Not caught.** Bare hostnames, IP addresses and file names that contain none of
@@ -446,14 +463,8 @@ effort.
   admits any all-lowercase letters-only string up to the 96-byte cap, because that cannot
   be told from a word; the shape rules still drop token prefixes, digests, hex, mixed
   tokens and long runs.
-- **Current Core strings that `display()` drops today** (from a scan of the Core,
-  GitHub provider, Bitbucket and updater sources, 1,569 translatable literals and 689
-  multi-word sentences): copy with curly apostrophes, arrows or ellipses (about 45),
-  phrases with `/` such as `owner/repository form` and `workspace/repository`
-  (5), `..\/` in an unsafe-path hint, HTML in a few strings (3 with `<`, 3 with
-  brackets), and guidance that quotes a token prefix (`ghp_`, `github_pat_`). Rewrite
-  these in ASCII without `/` and without prefixes, or keep them out of the sink
-  (HTML and SQL belong in templates and queries, not in failure text).
+- **Curated text still screened by shape.** Attached slashes, markup and quoted
+  token prefixes can cause rejection even in a translated message.
 
 ### Commit ids
 
@@ -493,15 +504,12 @@ rule in turn from a private copy and fails if the corpus does not notice.
 
 ### Adopting the screener
 
-Version impact: additive, a `feat` with no change to an existing class, so no
-consumer changes until it adopts. Release Please versions it like any other `feat`.
-
 Adoption order: release this package, then Core and the branch updater (Composer
 dependency bump), then the release updater (vendored copy).
 
 | Consumer | How |
 | --- | --- |
-| Core (`ran-booster`) | Composer dependency already present: bump it to the release, replace the screeners listed below (provider diagnostics, webhook remediation and activity text with `display()`; logger values with `identifier()`, `commit_id()` and otherwise `strict()`), and run the corpus in Core's tests. Before Core adopts `display()` in place of `InvalidCredentialInput::assert_safe_text` and the other constructors, these Core and provider strings must be reworded in ASCII, or their sink changed, because the constructor would otherwise throw on the provider's own messages: the three `CredentialPolicy` messages that quote `ghp_` and `github_pat_`; the `DeploymentOutcomeMessage` unsafe-path hint that contains `../`; the `owner/repository` and `workspace/repository` strings; and the 18 Core strings with curly apostrophes, em dashes or arrows. Core's real ids (`gh.credential.valid`, `bb.repository.not_found`, `webhook.operation_succeeded`, `ran_booster_storage_transaction_unavailable`, `github-fine-grained-pat-v1`) pass `identifier()`; two current ids that name a hash algorithm (`github-hmac-sha256-v1`, `artifact_sha256`) are dropped by the digest rule, so compare those against their closed list instead. |
+| Core (`ran-booster`) | Composer dependency already present: bump it to the release, replace the screeners listed below (provider diagnostics, webhook remediation and activity text with `display()`; logger values with `identifier()`, `commit_id()` and otherwise `strict()`), and run the corpus in Core's tests. Use curated translations for diagnostics and keep fixed fallbacks for text containing a rejected shape, such as the attached slashes in `owner/repository` and quoted token prefixes. Core's real ids (`gh.credential.valid`, `bb.repository.not_found`, `webhook.operation_succeeded`, `ran_booster_storage_transaction_unavailable`, `github-fine-grained-pat-v1`) pass `identifier()`; two current ids that name a hash algorithm (`github-hmac-sha256-v1`, `artifact_sha256`) are dropped by the digest rule, so compare those against their closed list instead. |
 | Branch updater | Composer dependency bump; `AdmittedFailureReason::screen_detail()` becomes a call to `FailureText::strict( $detail, 64 )`; run the corpus. |
 | Release updater | Vendored copy: bump the exact pin in `composer.json`; extend `scripts/sync-updater-support.php` to generate `src/Dependency/FailureText.php` (the class has exactly one namespace occurrence, as the script requires); add the `RAN\WPReleaseUpdater\V1\Dependency\FailureText` entry, with that path, to the class map in `runtime.php`; recompute `runtime-copy.json` `package_revision`; run `composer sync:updater-support` then `check:updater-support`; call `FailureText::strict()` from `ReleaseRejection::detail()`. |
 
@@ -512,7 +520,7 @@ old screener passed and the shared one drops, or the reverse for benign text.
 
 | Screener | Loses | Gains |
 | --- | --- | --- |
-| Core `ProviderDiagnosticResult` private screen and `is_safe_text()` (move to `display()`) | text with `=`, `@`, `;`, `\|`, `&`, `%XX`, `a:b`, non-ASCII; curated sentences that mention a token or password are kept | rejection of non-ASCII and invisible characters (its `[\x00-\x1F\x7F]` without `/u` passed U+202E, U+200B and U+0085); query-string and `name=value` credentials; token prefixes at any length including `ATBB`, `ATCTT3`, `ghp-`; digest forms; hex and base64 runs through separators; relative and embedded paths; obfuscated schemes; snake_case codes of 40 or more characters now pass |
+| Core `ProviderDiagnosticResult` private screen and `is_safe_text()` (move to `display()`) | text with `=`, `@`, `;`, `\|`, `&`, `%XX`, `a:b`, non-ASCII; curated sentences that mention a token or password are kept | rejection of control and format characters (its `[\x00-\x1F\x7F]` without `/u` passed U+202E, U+200B and U+0085); query-string and `name=value` credentials; token prefixes at any length including `ATBB`, `ATCTT3`, `ghp-`; digest forms; hex and base64 runs through separators; relative and embedded paths; obfuscated schemes; snake_case codes of 40 or more characters now pass |
 | Core `InvalidCredentialInput` (`display()`) | the same text, plus anything its narrower set allowed (bare `https://x`, hex, `sha256=`, `AKIA`) | all of the above in one policy rather than a drifted copy |
 | Core webhook remediation (`RepositoryWebhookOperationResult`, `RepositoryWebhookFitnessResult`; `display()`) | any printable text up to 512 that holds a screened shape (they checked controls and length only) | every shape; the controller and coordinator that call `is_safe_text()` on the in-progress #834 branch move to `display()` with the same bounds |
 | Core `BoosterLogger` string context (`identifier()`, `commit_id()`, else `strict()`) | its pre-screen normalization of control characters to spaces (the shared screener drops instead); its 40 or more character run rule that dropped snake_case diagnostic ids such as `ran_booster_storage_transaction_unavailable` (they now pass `identifier()`); exact 32 hex correlation ids stay a Core-local check | whole-text screening of free text before it is kept |
@@ -520,10 +528,7 @@ old screener passed and the shared one drops, or the reverse for benign text.
 | Branch updater `AdmittedFailureReason::screen_detail()` (`strict( $detail, 64 )`) | its `[A-Za-z0-9 ._-]` allowlist as a charset (the shared screener also allows `, ( ) ' " ! * + $`), and its input cap of 1,024 (now 4,096, truncated to the caller's bound) | `tokenizer`, `secretary`, `session`, `key`, short commit ids and prose with a colon and a space now pass; rejection of `pwd`, `nonce`, `Basic`, `npm_`, `sk_live_`, `AKIA` and the other prefixes it missed |
 
 A caller that wants the branch updater's narrower charset applies it after the
-shared screener. There is no charset mode: the three modes differ only in the prose
-rule and the identifier shape, and a further mode would be another policy to keep
-in sync.
-
+shared screener.
 
 ## Package boundary
 

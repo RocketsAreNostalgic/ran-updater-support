@@ -10,6 +10,28 @@ final class WordPressHeaders {
 	public const MAX_BYTES = 8192;
 
 	/**
+	 * Read and parse one local header file on demand, up to MAX_BYTES.
+	 *
+	 * An unavailable or non-regular file yields null. A readable file without
+	 * matching headers yields an empty array. The caller resolves the installed
+	 * path and enforces containment and package identity before calling.
+	 *
+	 * @param string                $path   Resolved local header file.
+	 * @param array<string, string> $labels Result keys mapped to their on-disk labels.
+	 * @phpstan-impure
+	 * @return array<string, non-empty-list<string>>|null
+	 */
+	public static function read( string $path, array $labels ): ?array {
+		if ( null === RegularFileStat::read( $path ) ) {
+			return null;
+		}
+
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Read only the local header window. A removed or unreadable file yields null.
+		$contents = @file_get_contents( $path, false, null, 0, self::MAX_BYTES );
+		return false === $contents ? null : self::parse( $contents, $labels );
+	}
+
+	/**
 	 * Scan the first 8 KiB using WordPress-style, case-insensitive header labels.
 	 *
 	 * Each requested key maps to its occurrences in file order. Absent keys are
