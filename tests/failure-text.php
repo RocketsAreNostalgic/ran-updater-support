@@ -102,6 +102,26 @@ use RAN\UpdaterSupport\V1\FailureText;
 		}
 	}
 
+	// Bounds are bytes: incomplete UTF-8 codepoints are discarded, then the prefix is screened.
+	foreach ( array(
+		1 => null,
+		2 => 'é',
+		3 => 'é',
+		4 => 'é',
+		5 => 'é中',
+		6 => 'é中',
+		7 => 'é中',
+		8 => 'é中',
+		9 => 'é中😀',
+	) as $bound => $expected ) {
+		if ( FailureText::display( 'é中😀', $bound ) !== $expected ) {
+			$fail( "UTF-8 byte boundary failed at {$bound}" );
+		}
+	}
+	if ( null !== FailureText::display( 'a / b', 3 ) ) {
+		$fail( 'bounded slash separator was not screened again' );
+	}
+
 	// A cut that leaves a credential word beside other text is screened again: strict drops it, display keeps it.
 	if ( null !== FailureText::strict( 'a passenger rides', 6 ) || 'a pass' !== FailureText::display( 'a passenger rides', 6 ) ) {
 		$fail( 'a bounded cut was not screened again' );
@@ -189,11 +209,11 @@ use RAN\UpdaterSupport\V1\FailureText;
 		return $out;
 	};
 
-	// Property 1: a hostile shape set off by spaces from any surroundings is always dropped, at any bound.
+	// Property 1: context-independent hostile shapes are dropped when surrounded by text.
 	$non_empty = static fn( array $values ): array => array_values( array_filter( $values, static fn( string $value ): bool => '' !== trim( $value ) ) );
 	$injected  = array(
 		'strict'  => $non_empty( array_merge( $hostile, $strict_only ) ),
-		'display' => $non_empty( $hostile ),
+		'display' => $non_empty( array_diff_key( $hostile, array_flip( array( 'slash leading', 'slash trailing' ) ) ) ),
 	);
 	foreach ( $modes as $mode => $screen ) {
 		for ( $case = 0; $case < 3000; ++$case ) {

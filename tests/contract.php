@@ -78,7 +78,7 @@ foreach ( $repository_paths['invalid'] as $name => $input ) {
 	throw new RuntimeException( "unsafe repository-relative path fixture was accepted: {$name}" );
 }
 
-// Reasons: closed vocabularies, one fixture per reason, and unchanged accept/reject behaviour.
+// Reasons: closed vocabularies, legacy ASCII behavior and new UTF-8 admission.
 $fail    = static function ( string $message ): never {
 	// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- dependency-free CLI contract failure only.
 	throw new RuntimeException( $message );
@@ -88,7 +88,7 @@ $reasons = require __DIR__ . '/fixtures/path-reasons.php';
 // Archive path reasons: each fixture yields exactly its reason and every reason is exercised.
 foreach ( $reasons['archive_paths'] as $reason => $archive_names ) {
 	foreach ( $archive_names as $name ) {
-		if ( ArchiveSafety::path_failure( $name ) !== $reason || null !== ArchiveSafety::normalize_path( $name ) ) {
+		if ( ArchiveSafety::path_failure( $name, allow_utf8: true ) !== $reason || null !== ArchiveSafety::normalize_path( $name, allow_utf8: true ) ) {
 			$fail( "path reason fixture failed: {$reason}" );
 		}
 	}
@@ -97,7 +97,7 @@ if ( array_keys( $reasons['archive_paths'] ) !== ArchiveSafety::PATH_FAILURES ) 
 	$fail( 'path reason vocabulary and fixtures differ' );
 }
 
-// Legacy normalize_path, frozen verbatim as the equivalence reference.
+// Legacy normalize_path, frozen verbatim as the default-mode equivalence reference.
 $legacy_normalize_path = static function ( string $name ): ?array {
 	if (
 		'' === $name || strlen( $name ) > 4096 || str_starts_with( $name, '/' )
@@ -125,6 +125,23 @@ $legacy_normalize_path = static function ( string $name ): ?array {
 		'path'      => $path,
 		'directory' => $directory,
 	);
+};
+
+// Legacy path_failure whole-name checks, frozen verbatim for reason precedence.
+$legacy_path_failure_prefix = static function ( string $name ): ?string {
+	if ( '' === $name ) {
+		return 'path_empty';
+	}
+	if ( strlen( $name ) > 4096 ) {
+		return 'path_too_long';
+	}
+	if ( str_starts_with( $name, '/' ) ) {
+		return 'path_absolute';
+	}
+	if ( 1 === preg_match( '/[\\x00-\\x1f\\x7f]/', $name ) ) {
+		return 'path_control_character';
+	}
+	return null;
 };
 
 $archive_bytes = static function ( int $length ): string {
@@ -221,20 +238,33 @@ for ( $round = 0; $round < 40000; ++$round ) {
 
 $seen_reasons = array();
 foreach ( $archive_names as $name ) {
-	$legacy  = $legacy_normalize_path( $name );
-	$current = ArchiveSafety::normalize_path( $name );
-	$reason  = ArchiveSafety::path_failure( $name );
-	if ( $legacy !== $current ) {
+	$legacy      = $legacy_normalize_path( $name );
+	$default     = ArchiveSafety::normalize_path( $name );
+	$current     = ArchiveSafety::normalize_path( $name, allow_utf8: true );
+	$reason      = ArchiveSafety::path_failure( $name );
+	$utf8_reason = ArchiveSafety::path_failure( $name, allow_utf8: true );
+	if ( $legacy !== $default ) {
+		$fail( 'default normalize_path differs from the legacy rule for a corpus name' );
+	}
+	if ( $legacy !== $current && ( null !== $legacy || 1 !== preg_match( '/[^\x00-\x7f]/u', $name ) ) ) {
 		$fail( 'normalize_path differs from the legacy rule for a corpus name' );
 	}
-	if ( ( null === $reason ) !== ( null !== $legacy ) ) {
-		$fail( 'path_failure disagrees with normalize_path for a corpus name' );
+	if ( ( null === $reason ) !== ( null !== $default ) || ( null === $utf8_reason ) !== ( null !== $current ) ) {
+		$fail( 'path_failure disagrees with normalize_path for a corpus name and mode' );
 	}
-	if ( null !== $reason ) {
-		if ( ! in_array( $reason, ArchiveSafety::PATH_FAILURES, true ) ) {
+	// Earlier whole-name reasons, including ASCII controls in malformed UTF-8, keep their precedence in both modes.
+	$legacy_reason = $legacy_path_failure_prefix( $name );
+	if ( null !== $legacy_reason && ( $legacy_reason !== $reason || $legacy_reason !== $utf8_reason ) ) {
+		$fail( 'path_failure changed the precedence of a legacy whole-name reason' );
+	}
+	foreach ( array( $reason, $utf8_reason ) as $mode_reason ) {
+		if ( null === $mode_reason ) {
+			continue;
+		}
+		if ( ! in_array( $mode_reason, ArchiveSafety::PATH_FAILURES, true ) ) {
 			$fail( 'path_failure returned a value outside the closed vocabulary' );
 		}
-		$seen_reasons[ $reason ] = true;
+		$seen_reasons[ $mode_reason ] = true;
 	}
 }
 if ( count( $archive_names ) < 100000 || count( $seen_reasons ) !== count( ArchiveSafety::PATH_FAILURES ) ) {
