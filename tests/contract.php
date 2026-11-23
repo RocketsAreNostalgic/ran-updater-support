@@ -34,6 +34,30 @@ foreach ( $fixture['collisions'] as $name => $case ) {
 		throw new RuntimeException( "collision fixture failed: {$name}" );
 	}
 }
+$seen_size_failures = array();
+foreach ( $fixture['sizes'] as $name => $case ) {
+	[$uncompressed, $compressed, $directory, $ratio, $floor, $expected] = $case;
+	$actual = ArchiveSafety::entry_size_failure(
+		uncompressed_size: $uncompressed,
+		compressed_size: $compressed,
+		directory: $directory,
+		max_compression_ratio: $ratio,
+		min_ratio_bytes: $floor
+	);
+	if ( $actual !== $expected ) {
+		// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- dependency-free CLI contract failure only.
+		throw new RuntimeException( "size fixture failed: {$name}" );
+	}
+	if ( null !== $actual ) {
+		$seen_size_failures[ $actual ] = true;
+	}
+}
+foreach ( ArchiveSafety::ENTRY_SIZE_FAILURES as $size_failure ) {
+	if ( ! isset( $seen_size_failures[ $size_failure ] ) ) {
+		// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- dependency-free CLI contract failure only.
+		throw new RuntimeException( "size failure vocabulary case untested: {$size_failure}" );
+	}
+}
 
 $repository_paths = require __DIR__ . '/fixtures/repository-relative-path.php';
 foreach ( $repository_paths['valid'] as $name => $case ) {
