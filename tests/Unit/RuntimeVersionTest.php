@@ -23,7 +23,7 @@ final class RuntimeVersionTest extends TestCase {
 		return array(
 			'legacy'                   => array( '7.4.33', '7.4.33' ),
 			'Ubuntu'                   => array( '8.2.0-ubuntu1', '8.2.0' ),
-			'Debian'                   => array( '8.2.31-1~deb12u1', '8.2.31' ),
+			'Debian revision tilde'    => array( '8.2.31-1~deb12u1', '8.2.31' ),
 			'distribution build'       => array( '8.3.7-1ubuntu2.4', '8.3.7' ),
 			'two components'           => array( '8.3', '8.3.0' ),
 			'patch release plus build' => array( '8.4.11+vendor.1', '8.4.11' ),
@@ -37,6 +37,7 @@ final class RuntimeVersionTest extends TestCase {
 			'prerelease leading zero'  => array( '8.5.0-RC.01', null ),
 			'malformed stage'          => array( '8.5.0-rc.foo', null ),
 			'malformed Debian stage'   => array( '8.5.0~alpha.01-1', null ),
+			'unknown Debian stage'     => array( '8.5.0~pre1-1', null ),
 			'unseparated vendor'       => array( '8.2.0ubuntu1', null ),
 			'trailing newline'         => array( "8.2.0\n", null ),
 			'trailing separator'       => array( '8.2.0-ubuntu1+', null ),

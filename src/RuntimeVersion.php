@@ -12,11 +12,12 @@ final class RuntimeVersion {
 	private const CORE      = '(' . self::NUMBER . '\.' . self::NUMBER . ')(?:\.(' . self::NUMBER . '))?';
 	private const SERIAL    = '(?:\.?(' . self::NUMBER . '))?';
 	private const PHP_STAGE = 'dev|alpha|beta|rc';
-	private const PHP_BUILD = '(?![-~](?:' . self::PHP_STAGE . ')(?=[0-9.+_~-]|\z))[-+~][A-Za-z0-9]+(?:[.+_~-][A-Za-z0-9]+)*';
+	private const PHP_BUILD = '(?!-(?:' . self::PHP_STAGE . ')(?=[0-9.+_~-]|\z))[-+][A-Za-z0-9]+(?:[.+_~-][A-Za-z0-9]+)*';
 
 	/**
 	 * Return a three-component PHP core version, with any upstream stage retained.
 	 * Downstream build suffixes, such as "-ubuntu1" and "-1~deb12u1", are omitted.
+	 * A leading tilde requires a recognized prerelease stage.
 	 */
 	public static function php( string $value ): ?string {
 		// The PHP_BUILD lookahead reserves upstream stage spellings, including malformed serials.

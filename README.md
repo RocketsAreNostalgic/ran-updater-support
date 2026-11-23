@@ -245,11 +245,14 @@ over a name corpus with case variants.
   return a three-part runtime version with a normalized prerelease if present,
   or `null` for an unrecognized input. For example, `8.2.0-ubuntu1` becomes
   `8.2.0`, Debian's `8.5.0~alpha4-1` becomes `8.5.0-alpha.4`, and
-  `6.8-RC1` becomes `6.8.0-rc.1`. WordPress prerelease revisions
-  and their `-src` suffix are dropped. A standalone `-src` remains. Callers
-  still validate requirement headers and choose a comparison policy. With
-  `version_compare()`, compare three-part cores on both sides to preserve
-  prerelease ordering against a two-part minimum such as `6.8`.
+  `6.8-RC1` becomes `6.8.0-rc.1`. A tilde immediately after a PHP core version
+  requires a recognized prerelease stage. A tilde inside the package revision
+  is stripped with the revision, as in `8.2.31-1~deb12u1` becoming `8.2.31`.
+  WordPress prerelease revisions and their `-src` suffix are dropped.
+  A standalone `-src` remains. Callers still validate requirement headers and
+  choose a comparison policy. With `version_compare()`, compare three-part
+  cores on both sides to preserve prerelease ordering against a two-part
+  minimum such as `6.8`.
 - **`PluginFileIdentifier::is_valid($value)`** checks relative identifiers such
   as `main.php` and `package/src/main.PHP`. Each slash-separated component
   starts with an ASCII letter or digit and can also contain dots, underscores
