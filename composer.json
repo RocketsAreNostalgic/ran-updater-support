@@ -17,6 +17,7 @@
     "phpcompatibility/phpcompatibility-paragonie": "2.0.0-alpha2",
     "phpcompatibility/phpcompatibility-wp": "3.0.0-alpha2",
     "phpstan/phpstan": "^2.1",
+    "phpunit/phpunit": "^11.5",
     "ran/coding-standards": "^1.0"
   },
   "autoload": {
@@ -35,6 +36,7 @@
     "validate:strict": "composer validate --strict --no-check-publish",
     "test:standards": "node --test tests/owned-methods.test.mjs",
     "test:contract": "php tests/contract.php",
+    "test:unit": "@php vendor/bin/phpunit --bootstrap vendor/autoload.php --do-not-cache-result --fail-on-warning tests/Unit",
     "test:package-directory": "php tests/package-directory.php",
     "test:working-copy": "php tests/working-copy.php",
     "test:failure-text": "php tests/failure-text.php",
@@ -50,6 +52,7 @@
     "test": [
       "@test:analysis-coverage",
       "@test:contract",
+      "@test:unit",
       "@test:package-directory",
       "@test:working-copy",
       "@test:failure-text",
