@@ -13,7 +13,8 @@ final class WordPressHeaders {
 	 * Read and parse one local header file on demand, up to MAX_BYTES.
 	 *
 	 * An unavailable or non-regular file yields null, as does a change in
-	 * observed file identity. A readable file without matching headers yields
+	 * observed file identity or a read that ends before the header window
+	 * declared by the opened file. A readable file without matching headers yields
 	 * an empty array. The caller resolves the installed path and enforces
 	 * containment and package identity before calling.
 	 *
@@ -28,8 +29,11 @@ final class WordPressHeaders {
 			return null;
 		}
 
-		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Open one local handle for identity checks and the bounded read. An unavailable file yields null.
-		$handle = @fopen( $path, 'rb' );
+		// The "n" mode flag adds O_NONBLOCK where the platform defines it. A path
+		// swapped for a FIFO or device after the lstat() then opens without
+		// waiting, and fstat() rejects it. Reads from a regular file are unaffected.
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Open one local read-only handle for identity checks and the bounded read. An unavailable file yields null.
+		$handle = @fopen( $path, 'rbn' );
 		if ( false === $handle ) {
 			return null;
 		}
@@ -40,10 +44,18 @@ final class WordPressHeaders {
 				return null;
 			}
 
-			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_fread -- Read only the header window from the checked handle. A read failure yields null.
-			$contents = @fread( $handle, self::MAX_BYTES );
-			if ( false === $contents ) {
-				return null;
+			// Read the whole window the opened file declares. A failed, short or
+			// early-ending read yields null, never a partial header block.
+			$remaining = min( self::MAX_BYTES, $opened['size'] );
+			$contents  = '';
+			while ( $remaining > 0 ) {
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_fread -- Read only the header window from the checked handle. A read failure yields null.
+				$chunk = @fread( $handle, $remaining );
+				if ( false === $chunk || '' === $chunk ) {
+					return null;
+				}
+				$contents  .= $chunk;
+				$remaining -= strlen( $chunk );
 			}
 
 			$after = RegularFileStat::read( $path );

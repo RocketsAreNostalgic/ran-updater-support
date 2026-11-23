@@ -127,6 +127,23 @@ $legacy_normalize_path = static function ( string $name ): ?array {
 	);
 };
 
+// Legacy path_failure whole-name checks, frozen verbatim for reason precedence.
+$legacy_path_failure_prefix = static function ( string $name ): ?string {
+	if ( '' === $name ) {
+		return 'path_empty';
+	}
+	if ( strlen( $name ) > 4096 ) {
+		return 'path_too_long';
+	}
+	if ( str_starts_with( $name, '/' ) ) {
+		return 'path_absolute';
+	}
+	if ( 1 === preg_match( '/[\\x00-\\x1f\\x7f]/', $name ) ) {
+		return 'path_control_character';
+	}
+	return null;
+};
+
 $archive_bytes = static function ( int $length ): string {
 	$parts = array();
 	while ( $length > 255 ) {
@@ -234,6 +251,11 @@ foreach ( $archive_names as $name ) {
 	}
 	if ( ( null === $reason ) !== ( null !== $default ) || ( null === $utf8_reason ) !== ( null !== $current ) ) {
 		$fail( 'path_failure disagrees with normalize_path for a corpus name and mode' );
+	}
+	// Earlier whole-name reasons, including ASCII controls in malformed UTF-8, keep their precedence in both modes.
+	$legacy_reason = $legacy_path_failure_prefix( $name );
+	if ( null !== $legacy_reason && ( $legacy_reason !== $reason || $legacy_reason !== $utf8_reason ) ) {
+		$fail( 'path_failure changed the precedence of a legacy whole-name reason' );
 	}
 	foreach ( array( $reason, $utf8_reason ) as $mode_reason ) {
 		if ( null === $mode_reason ) {

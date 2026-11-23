@@ -91,7 +91,8 @@ Guarantees, stated precisely:
 
 Archive path reasons (`path_failure()`, checked in this order): `path_empty`,
 `path_too_long` (over 4,096 bytes), `path_absolute` (leading slash),
-`path_control_character` (control, format, line or paragraph separator),
+`path_control_character` (control, format, line or paragraph separator; an
+ASCII control byte is reported before malformed UTF-8),
 `path_unsafe_character` (non-ASCII in default mode, malformed UTF-8, or one of `\ : < > " | ? *`),
 `path_empty_component` (a `//`, or an empty
 name before or after a slash), `path_dot_segment` (`.` or `..`),
@@ -260,9 +261,11 @@ over a name corpus with case variants.
   Callers decide which fields are required, how to handle duplicates, and what
   values to admit.
 - **`WordPressHeaders::read($path, $labels)`** reads up to 8 KiB from one local
-  handle. It checks that the pathname identifies the opened regular file before
-  and after the read. An unavailable file, a non-regular file, or a detected
-  change in identity returns `null`. A readable file with no matching labels
+  read-only handle, opened without waiting on a FIFO or device. It checks that
+  the pathname identifies the opened regular file before and after the read.
+  An unavailable file, a non-regular file, a detected change in identity, or a
+  read that fails or ends before the header window the opened file declares
+  returns `null`. A readable file with no matching labels
   returns an empty array. The caller resolves the installed file and checks
   containment and package identity.
 - **`TemporaryArchive::with_archive($allocate, $acquire, $consume, $limit, $sha256, $size)`**
@@ -273,7 +276,10 @@ over a name corpus with case variants.
   SHA-256 in one bounded pass, and verifies any supplied expected digest and
   size. The consume callback receives the absolute path, digest and size for inspection
   and handoff. Cleanup runs on success or failure and reports an error if the
-  owned path cannot be cleared. Keep archive use inside the callback.
+  owned path cannot be cleared. Where the host reports no inode number, a file
+  at the path is removed only if its metadata and SHA-256 still match the
+  verified archive, or the untouched empty allocation; any other file is kept
+  and reported. Keep archive use inside the callback.
 - **`RuntimeVersion::php($value)`** and **`RuntimeVersion::wordpress($value)`**
   return a three-part runtime version with a normalized prerelease if present,
   or `null` for an unrecognized input. For example, `8.2.0-ubuntu1` becomes

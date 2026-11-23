@@ -87,6 +87,10 @@ final class ArchiveSafety {
 		if ( str_starts_with( $name, '/' ) ) {
 			return 'path_absolute';
 		}
+		// ASCII control bytes keep precedence over malformed UTF-8, as before UTF-8 admission.
+		if ( 1 === preg_match( '/[\x00-\x1f\x7f]/', $name ) ) {
+			return 'path_control_character';
+		}
 		$control = preg_match( '/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u', $name );
 		if ( 1 === $control ) {
 			return 'path_control_character';

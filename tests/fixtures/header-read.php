@@ -18,6 +18,9 @@ function lstat( string $path ): array|false {
  * @return resource|false
  */
 function fopen( string $path, string $mode ) {
+	if ( null !== WordPressHeadersTest::$before_open ) {
+		( WordPressHeadersTest::$before_open )();
+	}
 	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Open the native test fixture and record the handle for the close assertion.
 	$handle = \fopen( $path, $mode );
 	if ( false !== $handle ) {
@@ -42,13 +45,18 @@ function fstat( $handle ): array|false {
 }
 
 /**
+ * Record each request and optionally limit chunks or fail after some reads.
+ *
  * @param resource     $handle Open fixture handle.
  * @param positive-int $length Requested byte count.
  */
 function fread( $handle, int $length ): string|false {
 	WordPressHeadersTest::$lengths[] = $length;
+	$faulted                         = WordPressHeadersTest::$fail_read
+		|| ( null !== WordPressHeadersTest::$fail_after_reads && count( WordPressHeadersTest::$lengths ) > WordPressHeadersTest::$fail_after_reads );
+	$request                         = null === WordPressHeadersTest::$chunk_bytes ? $length : min( $length, WordPressHeadersTest::$chunk_bytes );
 	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread -- Read the native test fixture through the supplied handle.
-	$contents = WordPressHeadersTest::$fail_read ? false : \fread( $handle, $length );
+	$contents = $faulted ? false : \fread( $handle, $request );
 	if ( null !== WordPressHeadersTest::$after_read ) {
 		( WordPressHeadersTest::$after_read )();
 	}

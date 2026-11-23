@@ -7,7 +7,7 @@ return array(
 		'path_empty'                      => array( '' ),
 		'path_too_long'                   => array( str_repeat( 'a/', 2048 ) . 'a' ),
 		'path_absolute'                   => array( '/plugin/main.php' ),
-		'path_control_character'          => array( "plugin/\x00main.php", "plugin/\nmain.php", "plugin/\x7fmain.php", "plugin/\u{0085}.php", "plugin/\u{200D}.php", "plugin/\u{202E}.php", "plugin/\u{2028}.php" ),
+		'path_control_character'          => array( "plugin/\x00main.php", "plugin/\nmain.php", "plugin/\x7fmain.php", "plugin/\u{0085}.php", "plugin/\u{200D}.php", "plugin/\u{202E}.php", "plugin/\u{2028}.php", "plugin/\xff\x00.php" ),
 		'path_unsafe_character'           => array( "plugin/\x80.php", "plugin/\xed\xa0\x80.php", 'plugin\\main.php', 'C:/plugin', 'a<b', 'a|b', 'a*b', 'a?b', 'a"b', 'plugin/画像?.svg' ),
 		'path_empty_component'            => array( 'plugin//main.php', 'plugin//', 'plugin///x/' ),
 		'path_dot_segment'                => array( './plugin', 'plugin/../main.php', 'plugin/./main.php', 'plugin/..', '..' ),

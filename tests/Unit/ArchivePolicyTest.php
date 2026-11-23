@@ -56,6 +56,15 @@ final class ArchivePolicyTest extends TestCase {
 		self::assertSame( 'path_unsafe_character', ArchiveSafety::path_failure( "plugin/\xff", allow_utf8: true ) );
 	}
 
+	public function test_ascii_control_bytes_precede_malformed_utf8(): void {
+		foreach ( array( "plugin/\x00\xff", "plugin/\xff\n.php", "\x7f\xc3\x28", "plugin/\xed\xa0\x80/\x1f.php", "\xc3\xa9\x80\t" ) as $path ) {
+			foreach ( array( false, true ) as $allow_utf8 ) {
+				self::assertSame( 'path_control_character', ArchiveSafety::path_failure( $path, $allow_utf8 ) );
+				self::assertNull( ArchiveSafety::normalize_path( $path, $allow_utf8 ) );
+			}
+		}
+	}
+
 	public function test_policy_reasons_and_size_floor(): void {
 		$stat = array(
 			'size'              => 131072,

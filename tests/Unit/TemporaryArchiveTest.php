@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace RAN\UpdaterSupport\V1\Tests;
 
+use Closure;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 use RAN\UpdaterSupport\V1\TemporaryArchive;
 use RuntimeException;
@@ -146,6 +149,70 @@ final class TemporaryArchiveTest extends TestCase {
 		} finally {
 			chdir( $directory );
 			self::remove( $path );
+		}
+	}
+
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_cleanup_without_file_identity_removes_only_the_verified_archive(): void {
+		require_once dirname( __DIR__ ) . '/fixtures/coarse-file-identity.php';
+		$failure  = new RuntimeException( 'Test callback failed.' );
+		$replace  = static function ( string $contents, int $mode_bits = 0 ): Closure {
+			return static function ( string $archive ) use ( $contents, $mode_bits ): void {
+				$mode = fileperms( $archive );
+				self::assertIsInt( $mode );
+				self::remove( $archive );
+				self::write( $archive, $contents );
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_chmod -- Match the replaced file's metadata, or differ only by the given bits.
+				self::assertTrue( chmod( $archive, ( $mode & 07777 ) ^ $mode_bits ) );
+			};
+		};
+		$write    = static function ( string $destination ): void {
+			self::write( $destination, 'archive data' );
+		};
+		$fail     = static function () use ( $failure ): never {
+			throw $failure;
+		};
+		$retained = 'The temporary archive could not be removed.';
+
+		// Acquire, consume, limit, digest, expected message, previous exception, file left behind.
+		$cases = array(
+			'verified archive is removed'     => array( $write, static fn (): string => 'used', null, null, null, null ),
+			'same-size replacement is kept'   => array( $write, $replace( 'replacement!' ), null, $retained, null, 'replacement!' ),
+			'other-size replacement is kept'  => array( $write, $replace( 'replacement' ), null, $retained, null, 'replacement' ),
+			'other-mode replacement is kept'  => array( $write, $replace( 'archive data', 0040 ), null, $retained, null, 'archive data' ),
+			'consumer failure still removes'  => array( $write, $fail, null, 'Test callback failed.', $failure, null ),
+			'digest mismatch still removes'   => array( $write, $fail, hash( 'sha256', 'other data' ), 'The acquired archive could not be verified.', null, null ),
+			'unwritten allocation is removed' => array( $fail, $fail, null, 'Test callback failed.', $failure, null ),
+			'unverified write is kept'        => array(
+				static function ( string $destination ) use ( $write, $fail ): void {
+					$write( $destination );
+					$fail();
+				},
+				$fail,
+				null,
+				$retained,
+				$failure,
+				'archive data',
+			),
+		);
+		foreach ( $cases as $label => [ $acquire, $consume, $digest, $message, $previous, $left ] ) {
+			$path = self::allocate();
+			try {
+				$result = TemporaryArchive::with_archive( static fn (): string => $path, $acquire, $consume, 20, $digest );
+				self::assertNull( $message, $label );
+				self::assertSame( 'used', $result, $label );
+			} catch ( RuntimeException $caught ) {
+				self::assertSame( $message, $caught->getMessage(), $label );
+				self::assertSame( $previous, $caught === $previous ? $caught : $caught->getPrevious(), $label );
+			} finally {
+				if ( null === $left ) {
+					self::assertFileDoesNotExist( $path, $label );
+				} else {
+					self::assertStringEqualsFile( $path, $left, $label );
+				}
+				self::remove( $path );
+			}
 		}
 	}
 

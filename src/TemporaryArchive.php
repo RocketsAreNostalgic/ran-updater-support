@@ -21,6 +21,9 @@ final class TemporaryArchive {
 	 * may inspect or consume the file during the callback. It must not retain the
 	 * path for later use. A supplied size or digest is compared before handoff.
 	 * Cleanup failure is reported even if acquisition or consumption threw.
+	 * Where the host reports no inode number, cleanup removes the path only if
+	 * it still matches the last verified metadata and digest (or the untouched
+	 * empty allocation). Otherwise it is left in place and reported.
 	 *
 	 * @template Result
 	 * @param callable(): (string|false)            $allocate Creates a fresh local temporary file.
@@ -51,7 +54,9 @@ final class TemporaryArchive {
 			throw new RuntimeException( 'A fresh temporary archive file could not be allocated.' );
 		}
 
-		$cause = null;
+		$cause        = null;
+		$owned        = $allocated;
+		$owned_sha256 = null;
 		try {
 			$acquire( $path, $maximum_artifact_bytes );
 			$written = RegularFileStat::read( $path );
@@ -66,10 +71,12 @@ final class TemporaryArchive {
 
 			$digest   = self::digest( $path, $written['size'] );
 			$verified = RegularFileStat::read( $path );
-			if (
-				$verified !== $written
-				|| ( null !== $expected_sha256 && ! hash_equals( $expected_sha256, $digest ) )
-			) {
+			if ( $verified !== $written ) {
+				throw new RuntimeException( 'The acquired archive could not be verified.' );
+			}
+			$owned        = $written;
+			$owned_sha256 = $digest;
+			if ( null !== $expected_sha256 && ! hash_equals( $expected_sha256, $digest ) ) {
 				throw new RuntimeException( 'The acquired archive could not be verified.' );
 			}
 
@@ -78,7 +85,7 @@ final class TemporaryArchive {
 			$cause = $failure;
 			throw $failure;
 		} finally {
-			self::remove( $path, $allocated['dev'], $allocated['ino'], $cause );
+			self::remove( $path, $owned, $owned_sha256, $cause );
 		}
 	}
 
@@ -101,9 +108,15 @@ final class TemporaryArchive {
 		}
 	}
 
-	private static function remove( string $path, int $device, int $inode, ?Throwable $cause ): void {
+	/**
+	 * Remove the path only while it still holds the owned file.
+	 *
+	 * @param array{dev:int,ino:int,mode:int,nlink:int,uid:int,gid:int,size:int,mtime:int,ctime:int} $owned  Last verified snapshot.
+	 * @param string|null                                                                            $sha256 Verified digest, or null for the empty allocation.
+	 */
+	private static function remove( string $path, array $owned, ?string $sha256, ?Throwable $cause ): void {
 		$current = RegularFileStat::read( $path );
-		if ( null !== $current && $device === $current['dev'] && $inode === $current['ino'] ) {
+		if ( null !== $current && self::owns( $path, $current, $owned, $sha256 ) ) {
 			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink -- Remove the allocated entry. The consumer may already have consumed it.
 			if ( @unlink( $path ) ) {
 				return;
@@ -114,6 +127,34 @@ final class TemporaryArchive {
 		if ( file_exists( $path ) || is_link( $path ) ) {
 			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- The fixed message carries no archive data. The previous exception preserves the caller's failure for programmatic handling.
 			throw new RuntimeException( 'The temporary archive could not be removed.', 0, $cause );
+		}
+	}
+
+	/**
+	 * Without an inode number, a matching device does not identify the file.
+	 * Require the last verified metadata and content instead.
+	 *
+	 * @param array{dev:int,ino:int,mode:int,nlink:int,uid:int,gid:int,size:int,mtime:int,ctime:int} $current Current snapshot.
+	 * @param array{dev:int,ino:int,mode:int,nlink:int,uid:int,gid:int,size:int,mtime:int,ctime:int} $owned   Last verified snapshot.
+	 */
+	private static function owns( string $path, array $current, array $owned, ?string $sha256 ): bool {
+		if ( $current['dev'] !== $owned['dev'] || $current['ino'] !== $owned['ino'] ) {
+			return false;
+		}
+		if ( 0 !== $owned['ino'] ) {
+			return true;
+		}
+		if ( $current !== $owned ) {
+			return false;
+		}
+		if ( null === $sha256 ) {
+			// The untouched allocation is empty, so its metadata describes all of it.
+			return true;
+		}
+		try {
+			return hash_equals( $sha256, self::digest( $path, $current['size'] ) ) && RegularFileStat::read( $path ) === $current;
+		} catch ( RuntimeException ) {
+			return false;
 		}
 	}
 }
