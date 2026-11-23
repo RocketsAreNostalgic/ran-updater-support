@@ -7,8 +7,21 @@ namespace RAN\UpdaterSupport\V1;
 /** Pure path, metadata, and collision rules for ZIP archive inventories. */
 final class ArchiveSafety {
 
-	public const MAX_PATH_BYTES      = 4096;
-	public const MAX_COMPONENT_BYTES = 255;
+	public const MAX_PATH_BYTES                      = 4096;
+	public const MAX_COMPONENT_BYTES                 = 255;
+	public const DEFAULT_MAX_COMPRESSION_RATIO       = 100;
+	public const DEFAULT_COMPRESSION_RATIO_MIN_BYTES = 131072;
+
+	/**
+	 * Closed vocabulary returned by entry_size_failure().
+	 *
+	 * Fixed identifiers only; none carries archive text.
+	 */
+	public const ENTRY_SIZE_FAILURES = array(
+		'entry_size_invalid',
+		'entry_directory_payload',
+		'entry_compression_ratio',
+	);
 
 	/**
 	 * Closed vocabulary returned by path_failure().
@@ -144,6 +157,40 @@ final class ArchiveSafety {
 			return 'entry_volume_label';
 		}
 		return 0 === $flags || ( 0 !== ( $flags & 0x10 ) ) === $directory ? null : 'entry_type_mismatch';
+	}
+
+	/**
+	 * Say why a ZIP entry's declared size or compression ratio is rejected, or null when admitted.
+	 *
+	 * Rejects negative sizes or invalid limits, directory entries declaring non-zero payloads,
+	 * and entries at or above $min_ratio_bytes whose uncompressed/compressed ratio exceeds
+	 * $max_compression_ratio (including zero compressed size).
+	 *
+	 * The result is one of ENTRY_SIZE_FAILURES and never contains archive text.
+	 */
+	public static function entry_size_failure(
+		int $uncompressed_size,
+		int $compressed_size,
+		bool $directory,
+		int $max_compression_ratio = self::DEFAULT_MAX_COMPRESSION_RATIO,
+		int $min_ratio_bytes = self::DEFAULT_COMPRESSION_RATIO_MIN_BYTES
+	): ?string {
+		if ( $uncompressed_size < 0 || $compressed_size < 0 || $max_compression_ratio < 1 || $min_ratio_bytes < 0 ) {
+			return 'entry_size_invalid';
+		}
+		if ( $directory && 0 !== $uncompressed_size ) {
+			return 'entry_directory_payload';
+		}
+		if ( $uncompressed_size > 0 && $uncompressed_size >= $min_ratio_bytes ) {
+			if (
+				0 === $compressed_size
+				|| ( $compressed_size <= intdiv( PHP_INT_MAX, $max_compression_ratio ) && $uncompressed_size > $max_compression_ratio * $compressed_size )
+			) {
+				return 'entry_compression_ratio';
+			}
+		}
+
+		return null;
 	}
 
 	/** @param list<array{path:string,directory:bool}> $entries */
