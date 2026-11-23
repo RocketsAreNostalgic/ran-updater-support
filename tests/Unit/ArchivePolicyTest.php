@@ -28,6 +28,30 @@ final class ArchivePolicyTest extends TestCase {
 		ArchiveSafety::maximum_expanded_bytes( 0 );
 	}
 
+	public function test_unicode_paths_require_explicit_opt_in(): void {
+		// A destination can equate case variants or a composed and decomposed spelling.
+		foreach ( array( 'plugin/É.svg', "plugin/E\u{0301}.svg", 'plugin/é.svg/画像.svg' ) as $path ) {
+			self::assertNull( ArchiveSafety::path_failure( $path ) );
+			self::assertNull( ArchiveSafety::normalize_path( $path ) );
+			self::assertSame(
+				array(
+					'path'      => $path,
+					'directory' => false,
+				),
+				ArchiveSafety::normalize_path( $path, allow_utf8: true )
+			);
+		}
+		self::assertSame(
+			array(
+				'path'      => 'plugin/ресурсы/ملفات',
+				'directory' => true,
+			),
+			ArchiveSafety::normalize_path( 'plugin/ресурсы/ملفات/', allow_utf8: true )
+		);
+		self::assertNull( ArchiveSafety::path_failure( str_repeat( '界', 85 ) ) );
+		self::assertSame( 'component_too_long', ArchiveSafety::path_failure( str_repeat( '界', 85 ) . 'x' ) );
+	}
+
 	public function test_policy_reasons_and_size_floor(): void {
 		$stat = array(
 			'size'              => 131072,

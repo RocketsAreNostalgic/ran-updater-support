@@ -2,7 +2,7 @@
 
 `ran/updater-support` provides shared archive, failure-text, and local file primitives for RAN updater packages. The library supports PHP 8.2 and later 8.x releases without WordPress. Archive policy evaluates the metadata supplied by the caller.
 
-`ArchiveSafety::normalize_path()` accepts valid UTF-8 relative paths with one optional trailing slash. It rejects control and format characters, line and paragraph separators, traversal, empty components, Windows-reserved names, unsafe punctuation, trailing spaces or dots, and paths or components over the documented byte limits. It preserves admitted names byte for byte.
+`ArchiveSafety::path_failure()` validates UTF-8 relative paths with one optional trailing slash. It rejects control and format characters, line and paragraph separators, traversal, empty components, Windows-reserved names, unsafe punctuation, trailing spaces or dots, and paths or components over the documented byte limits.
 
 `entry_type_reason()` accepts ZIP origin OS values DOS (`0`) and UNIX (`3`). UNIX accepts unspecified, regular, and directory modes. DOS accepts unspecified file flags or a matching directory bit and rejects volume labels. `collision_failure()` detects duplicate paths and files used as ancestors while allowing explicit or implicit directories.
 
@@ -35,8 +35,10 @@ $collision = ArchiveSafety::collision_failure([
 
 Only pass successfully normalized entry facts to `collision_failure()`. It returns
 `path_duplicate`, `file_parent_collision`, or `null`. Collision checks fold
-ASCII case and compare other bytes exactly. The extractor owns any additional
-case or normalization equivalences on its destination filesystem.
+ASCII case and compare other bytes exactly. `normalize_path()` defaults to
+ASCII for compatibility. An extractor that checks any additional case and
+normalization equivalences on its destination filesystem can pass
+`allow_utf8: true` to receive validated UTF-8 paths with their spelling intact.
 
 ### Shared ZIP policy
 
@@ -267,7 +269,7 @@ over a name corpus with case variants.
   in a WordPress adapter. The acquisition callback writes in place and enforces
   the byte limit during transfer. The helper checks the result size, computes
   SHA-256 in one bounded pass, and verifies any supplied expected digest and
-  size. The consume callback receives the path, digest and size for inspection
+  size. The consume callback receives the absolute path, digest and size for inspection
   and handoff. Cleanup runs on success or failure and reports an error if the
   owned path cannot be cleared. Keep archive use inside the callback.
 - **`RuntimeVersion::php($value)`** and **`RuntimeVersion::wordpress($value)`**
@@ -520,7 +522,7 @@ old screener passed and the shared one drops, or the reverse for benign text.
 
 | Screener | Loses | Gains |
 | --- | --- | --- |
-| Core `ProviderDiagnosticResult` private screen and `is_safe_text()` (move to `display()`) | text with `=`, `@`, `;`, `\|`, `&`, `%XX`, `a:b`, non-ASCII; curated sentences that mention a token or password are kept | rejection of control and format characters (its `[\x00-\x1F\x7F]` without `/u` passed U+202E, U+200B and U+0085); query-string and `name=value` credentials; token prefixes at any length including `ATBB`, `ATCTT3`, `ghp-`; digest forms; hex and base64 runs through separators; relative and embedded paths; obfuscated schemes; snake_case codes of 40 or more characters now pass |
+| Core `ProviderDiagnosticResult` private screen and `is_safe_text()` (move to `display()`) | text with `=`, `@`, `;`, `\|`, `&`, `%XX` or `a:b`; curated sentences that mention a token or password are kept | rejection of control and format characters (its `[\x00-\x1F\x7F]` without `/u` passed U+202E, U+200B and U+0085); query-string and `name=value` credentials; token prefixes at any length including `ATBB`, `ATCTT3`, `ghp-`; digest forms; hex and base64 runs through separators; relative and embedded paths; obfuscated schemes; snake_case codes of 40 or more characters now pass |
 | Core `InvalidCredentialInput` (`display()`) | the same text, plus anything its narrower set allowed (bare `https://x`, hex, `sha256=`, `AKIA`) | all of the above in one policy rather than a drifted copy |
 | Core webhook remediation (`RepositoryWebhookOperationResult`, `RepositoryWebhookFitnessResult`; `display()`) | any printable text up to 512 that holds a screened shape (they checked controls and length only) | every shape; the controller and coordinator that call `is_safe_text()` on the in-progress #834 branch move to `display()` with the same bounds |
 | Core `BoosterLogger` string context (`identifier()`, `commit_id()`, else `strict()`) | its pre-screen normalization of control characters to spaces (the shared screener drops instead); its 40 or more character run rule that dropped snake_case diagnostic ids such as `ran_booster_storage_transaction_unavailable` (they now pass `identifier()`); exact 32 hex correlation ids stay a Core-local check | whole-text screening of free text before it is kept |

@@ -15,8 +15,9 @@ final class TemporaryArchive {
 	 * Acquire, fingerprint and use a bounded local archive, then remove it.
 	 *
 	 * The trusted allocator creates a fresh empty file in a host-controlled
-	 * directory. The trusted writer fills that file in place, enforces the
-	 * supplied limit while writing, and closes it before returning. The consumer
+	 * directory. The callbacks receive a resolved absolute path. The writer
+	 * fills that file in place, enforces the supplied limit while writing, and
+	 * closes it before returning. The consumer
 	 * may inspect or consume the file during the callback. It must not retain the
 	 * path for later use. A supplied size or digest is compared before handoff.
 	 * Cleanup failure is reported even if acquisition or consumption threw.
@@ -43,8 +44,9 @@ final class TemporaryArchive {
 			throw new InvalidArgumentException( 'The temporary archive bounds or digest are invalid.' );
 		}
 
-		$path      = $allocate();
-		$allocated = false === $path ? null : RegularFileStat::read( $path );
+		$temporary = $allocate();
+		$allocated = false === $temporary ? null : RegularFileStat::read( $temporary );
+		$path      = null === $allocated || false === $temporary ? false : realpath( $temporary );
 		if ( false === $path || null === $allocated || 0 !== $allocated['size'] ) {
 			throw new RuntimeException( 'A fresh temporary archive file could not be allocated.' );
 		}

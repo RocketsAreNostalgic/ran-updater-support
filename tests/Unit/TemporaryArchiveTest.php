@@ -11,18 +11,20 @@ use RuntimeException;
 final class TemporaryArchiveTest extends TestCase {
 
 	public function test_verified_archive_is_available_only_during_use(): void {
-		$path = self::allocate();
-		$hash = hash( 'sha256', 'archive data' );
+		$path     = self::allocate();
+		$hash     = hash( 'sha256', 'archive data' );
+		$resolved = realpath( $path );
+		self::assertIsString( $resolved );
 		try {
 			$value = TemporaryArchive::with_archive(
 				static fn (): string => $path,
-				static function ( string $destination, int $limit ) use ( $path ): void {
-					self::assertSame( $path, $destination );
+				static function ( string $destination, int $limit ) use ( $resolved ): void {
+					self::assertSame( $resolved, $destination );
 					self::assertSame( 20, $limit );
 					self::write( $destination, 'archive data' );
 				},
-				static function ( string $archive, string $digest, int $size ) use ( $path, $hash ): int {
-					self::assertSame( $path, $archive );
+				static function ( string $archive, string $digest, int $size ) use ( $resolved, $hash ): int {
+					self::assertSame( $resolved, $archive );
 					self::assertFileExists( $archive );
 					self::assertSame( $hash, $digest );
 					return $size;
@@ -114,6 +116,35 @@ final class TemporaryArchiveTest extends TestCase {
 			);
 			self::assertFileDoesNotExist( $path );
 		} finally {
+			self::remove( $path );
+		}
+	}
+
+	public function test_relative_allocation_is_cleaned_up_after_a_working_directory_change(): void {
+		$directory = getcwd();
+		self::assertIsString( $directory );
+		$path     = self::allocate();
+		$resolved = realpath( $path );
+		self::assertIsString( $resolved );
+
+		try {
+			self::assertTrue( chdir( dirname( $path ) ) );
+			TemporaryArchive::with_archive(
+				static fn (): string => basename( $path ),
+				static function ( string $destination ) use ( $directory, $resolved ): void {
+					self::assertSame( $resolved, $destination );
+					self::assertTrue( chdir( $directory ) );
+					self::write( $destination, 'archive data' );
+				},
+				static function ( string $archive ) use ( $resolved ): void {
+					self::assertSame( $resolved, $archive );
+					self::assertFileExists( $archive );
+				},
+				20
+			);
+			self::assertFileDoesNotExist( $path );
+		} finally {
+			chdir( $directory );
 			self::remove( $path );
 		}
 	}

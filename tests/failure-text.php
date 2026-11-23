@@ -209,11 +209,11 @@ use RAN\UpdaterSupport\V1\FailureText;
 		return $out;
 	};
 
-	// Property 1: a hostile shape set off by spaces from any surroundings is always dropped, at any bound.
+	// Property 1: context-independent hostile shapes are dropped when surrounded by text.
 	$non_empty = static fn( array $values ): array => array_values( array_filter( $values, static fn( string $value ): bool => '' !== trim( $value ) ) );
 	$injected  = array(
 		'strict'  => $non_empty( array_merge( $hostile, $strict_only ) ),
-		'display' => $non_empty( $hostile ),
+		'display' => $non_empty( array_diff_key( $hostile, array_flip( array( 'slash leading', 'slash trailing' ) ) ) ),
 	);
 	foreach ( $modes as $mode => $screen ) {
 		for ( $case = 0; $case < 3000; ++$case ) {

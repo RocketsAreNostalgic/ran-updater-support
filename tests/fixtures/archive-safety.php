@@ -49,28 +49,7 @@ return array(
 		'nul byte'               => array( "plugin/\x00main.php", null ),
 		'newline'                => array( "plugin/\nmain.php", null ),
 		'control byte'           => array( "plugin/\x01main.php", null ),
-		'literal UTF8'           => array(
-			'plugin/é/画像.svg',
-			array(
-				'path'      => 'plugin/é/画像.svg',
-				'directory' => false,
-			),
-		),
-		'localized directory'    => array(
-			'plugin/ресурсы/ملفات/',
-			array(
-				'path'      => 'plugin/ресурсы/ملفات',
-				'directory' => true,
-			),
-		),
-		'UTF8 component 255'     => array(
-			str_repeat( '界', 85 ),
-			array(
-				'path'      => str_repeat( '界', 85 ),
-				'directory' => false,
-			),
-		),
-		'UTF8 component 256'     => array( str_repeat( '界', 85 ) . 'x', null ),
+		'literal UTF8'           => array( "plugin/\xc3\xa9.php", null ),
 		'invalid UTF8'           => array( "plugin/\xc3\x28.php", null ),
 		'non ascii byte'         => array( "plugin/\x80main.php", null ),
 		'percent encoded UTF8'   => array(

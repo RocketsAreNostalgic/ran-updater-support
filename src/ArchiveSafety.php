@@ -119,9 +119,14 @@ final class ArchiveSafety {
 		return null;
 	}
 
-	/** @return array{path:string,directory:bool}|null */
-	public static function normalize_path( string $name ): ?array {
-		if ( null !== self::path_failure( $name ) ) {
+	/**
+	 * Preserve ASCII admission for existing extractors. Opt in to UTF-8 after
+	 * accounting for additional filename equivalences on the destination filesystem.
+	 *
+	 * @return array{path:string,directory:bool}|null
+	 */
+	public static function normalize_path( string $name, bool $allow_utf8 = false ): ?array {
+		if ( null !== self::path_failure( $name ) || ( ! $allow_utf8 && 0 !== preg_match( '/[^\x00-\x7f]/', $name ) ) ) {
 			return null;
 		}
 
