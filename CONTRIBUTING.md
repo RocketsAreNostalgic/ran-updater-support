@@ -11,10 +11,10 @@ composer check
 ```
 
 `composer check` validates Composer metadata, lints PHP syntax, runs the shared
-RAN PHPCS/PHPCompatibility standards, runs PHPStan over production and maintained code, runs
-the archive-safety contract corpus, naming-enforcement regressions, and the
-retained release-workflow contract test. Add
-focused contract coverage when changing a public rule. See
+RAN PHPCS/PHPCompatibility standards, and runs PHPStan over production and
+maintained code. The test suite includes the archive-safety contract corpus,
+PHPUnit helper tests, naming-enforcement regressions, and the retained
+release-workflow contract test. Add focused contract coverage when changing a public rule. See
 [RELEASING.md](RELEASING.md) before changing release automation or preparing a
 release.
 
@@ -26,7 +26,8 @@ release.
 | `composer standards` | Shared PHPCS/WPCS/PHPCompatibility and RAN-owned method rules |
 | `composer standards:fix` | PHPCBF with the same rules and source paths |
 | `composer analyze` | Blocking PHPStan level 8 over isolated production and all maintained PHP |
-| `composer test` | Archive-safety, failure-text, naming-enforcement and release-workflow contracts |
+| `composer test` | PHPUnit and the analysis, archive, failure-text, naming and release contracts |
+| `composer test:unit` | PHPUnit coverage for updater header, version, identifier and stat helpers |
 | `composer test:failure-text` | Shared failure-text corpus and deterministic property tests |
 | `composer test:failure-text-mutation` | Removes each screener rule in turn; the corpus must notice |
 | `composer test:standards` | Positive/negative owned-method checks through the local ruleset |
@@ -133,12 +134,9 @@ This change adds no source exemptions and changes no executable PHP or dependenc
 
 ## Error-reporting inventory (#54)
 
-This package contains no catch blocks, suppression operators, logging, or
-filesystem, lock or journal code. The only places it discards a computed reason
-are listed below. Each row records where the reason is known, what leaves the
-site, and why nothing sensitive can leave. The package holds no credentials,
-tokens, URLs or remote text, so no value is redacted; the guarantee is that only
-fixed identifiers are returned.
+The pure archive and path helpers discard computed reasons at the points
+listed below. Each row records where the reason is known and what leaves the
+site. The reasons contain fixed identifiers only.
 
 | ID | File and site | Known at site | Leaves site | Class | Reason id | Redaction rationale | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
