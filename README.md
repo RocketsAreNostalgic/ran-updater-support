@@ -238,12 +238,14 @@ over a name corpus with case variants.
   `['Name' => 'Plugin Name', 'Version' => 'Version']`. Values are lists in file
   order. Missing fields have no entry, while an empty field yields `['']`.
   The parser handles an initial UTF-8 BOM, CR and CRLF, and WordPress-style
-  comment prefixes and terminators. Callers decide which fields are required,
-  how to handle duplicates, and what values to admit.
+  comment prefixes and terminators, including a compact `<?php/**` opening.
+  Callers decide which fields are required, how to handle duplicates, and what
+  values to admit.
 - **`RuntimeVersion::php($value)`** and **`RuntimeVersion::wordpress($value)`**
   return a three-part runtime version with a normalized prerelease if present,
   or `null` for an unrecognized input. For example, `8.2.0-ubuntu1` becomes
-  `8.2.0` and `6.8-RC1` becomes `6.8.0-rc.1`. WordPress prerelease revisions
+  `8.2.0`, Debian's `8.5.0~alpha4-1` becomes `8.5.0-alpha.4`, and
+  `6.8-RC1` becomes `6.8.0-rc.1`. WordPress prerelease revisions
   and their `-src` suffix are dropped. A standalone `-src` remains. Callers
   still validate requirement headers and choose a comparison policy. With
   `version_compare()`, compare three-part cores on both sides to preserve
@@ -256,9 +258,9 @@ over a name corpus with case variants.
 - **`RegularFileStat::read($path)`** reads a fresh native `lstat()` snapshot of
   a local regular-file entry. The snapshot contains `dev`, `ino`, raw `mode`,
   `nlink`, `uid`, `gid`, `size`, `mtime` and `ctime`. A missing entry,
-  directory or final-component symlink yields `null`. Callers govern ancestor
-  containment, permissions, link counts, digest checks, repeat observations and
-  cleanup.
+  directory, final-component symlink or stream-wrapper URI yields `null`.
+  Callers govern ancestor containment, permissions, link counts, digest checks,
+  repeat observations and cleanup.
 
 ## Failure text
 

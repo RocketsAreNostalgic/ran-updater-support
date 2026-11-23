@@ -12,7 +12,7 @@ final class RuntimeVersion {
 	private const CORE      = '(' . self::NUMBER . '\.' . self::NUMBER . ')(?:\.(' . self::NUMBER . '))?';
 	private const SERIAL    = '(?:\.?(' . self::NUMBER . '))?';
 	private const PHP_STAGE = 'dev|alpha|beta|rc';
-	private const PHP_BUILD = '(?!-(?:' . self::PHP_STAGE . ')(?=[0-9.+_~-]|\z))[-+~][A-Za-z0-9]+(?:[.+_~-][A-Za-z0-9]+)*';
+	private const PHP_BUILD = '(?![-~](?:' . self::PHP_STAGE . ')(?=[0-9.+_~-]|\z))[-+~][A-Za-z0-9]+(?:[.+_~-][A-Za-z0-9]+)*';
 
 	/**
 	 * Return a three-component PHP core version, with any upstream stage retained.
@@ -20,7 +20,7 @@ final class RuntimeVersion {
 	 */
 	public static function php( string $value ): ?string {
 		// The PHP_BUILD lookahead reserves upstream stage spellings, including malformed serials.
-		$pattern = '/\A' . self::CORE . '(?:-?(' . self::PHP_STAGE . ')' . self::SERIAL . ')?(?:' . self::PHP_BUILD . ')?\z/i';
+		$pattern = '/\A' . self::CORE . '(?:[-~]?(' . self::PHP_STAGE . ')' . self::SERIAL . ')?(?:' . self::PHP_BUILD . ')?\z/i';
 		if ( strlen( $value ) > self::MAX_BYTES || 1 !== preg_match( $pattern, $value, $matches, PREG_UNMATCHED_AS_NULL ) ) {
 			return null;
 		}

@@ -66,6 +66,23 @@ final class RegularFileStatTest extends TestCase {
 		}
 	}
 
+	public function test_rejects_wrapper_paths_before_native_stat(): void {
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- Detect native stat warnings in this test even when PHP silences them.
+		set_error_handler(
+			static function ( int $severity, string $message ): never {
+				self::fail( $message );
+			},
+			E_WARNING
+		);
+		try {
+			foreach ( array( '12fixture://sample', '+fixture://sample', '-fixture://sample', '.fixture://sample', 'data:,sample' ) as $path ) {
+				self::assertNull( RegularFileStat::read( $path ) );
+			}
+		} finally {
+			restore_error_handler();
+		}
+	}
+
 	private function remove_fixtures( string ...$paths ): void {
 		foreach ( $paths as $path ) {
 			if ( is_link( $path ) || is_file( $path ) ) {

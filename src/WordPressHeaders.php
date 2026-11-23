@@ -28,7 +28,7 @@ final class WordPressHeaders {
 
 		$headers = array();
 		foreach ( $labels as $key => $label ) {
-			$pattern = '/^[ \t]*(?:<\?php[ \t]+)?[ \t\/*#@]*'
+			$pattern = '/^[ \t]*(?:<\?(?:php)?)?[ \t\/*#@]*'
 				. preg_quote( $label, '/' ) . ':(.*?)(?:\*\/|\?>|$)/mi';
 			preg_match_all( $pattern, $contents, $matches );
 			$values = $matches[1] ?? array();

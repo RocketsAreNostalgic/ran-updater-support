@@ -16,7 +16,8 @@ final class RegularFileStat {
 	 * @return array{dev:int,ino:int,mode:int,nlink:int,uid:int,gid:int,size:int,mtime:int,ctime:int}|null
 	 */
 	public static function read( string $path ): ?array {
-		if ( '' === $path || false !== strpos( $path, "\0" ) || 1 === preg_match( '/\A[A-Za-z][A-Za-z0-9+.-]*:\/\//', $path ) ) {
+		// PHP recognizes two or more scheme characters before "://", plus bare "data:".
+		if ( '' === $path || false !== strpos( $path, "\0" ) || 0 !== preg_match( '/\A(?:[[:alnum:]+.-]{2,}:\/\/|data:)/', $path ) ) {
 			return null;
 		}
 

@@ -29,11 +29,14 @@ final class RuntimeVersionTest extends TestCase {
 			'patch release plus build' => array( '8.4.11+vendor.1', '8.4.11' ),
 			'PHP prerelease'           => array( '8.5.0RC1', '8.5.0-rc.1' ),
 			'prerelease with build'    => array( '8.5.0-beta2+packager1', '8.5.0-beta.2' ),
+			'Debian alpha'             => array( '8.5.0~alpha4-1', '8.5.0-alpha.4' ),
+			'Debian rc'                => array( '8.5.0~rc4-1', '8.5.0-rc.4' ),
 			'development build'        => array( '8.5.1-dev', '8.5.1-dev.0' ),
 			'empty value'              => array( '', null ),
 			'leading zero'             => array( '8.02.0', null ),
 			'prerelease leading zero'  => array( '8.5.0-RC.01', null ),
 			'malformed stage'          => array( '8.5.0-rc.foo', null ),
+			'malformed Debian stage'   => array( '8.5.0~alpha.01-1', null ),
 			'unseparated vendor'       => array( '8.2.0ubuntu1', null ),
 			'trailing newline'         => array( "8.2.0\n", null ),
 			'trailing separator'       => array( '8.2.0-ubuntu1+', null ),
@@ -90,5 +93,11 @@ final class RuntimeVersionTest extends TestCase {
 		self::assertTrue( version_compare( $wp_rc, $wp_stable, '<' ) );
 		self::assertTrue( version_compare( $wp_rc, $wp_beta, '>' ) );
 		self::assertTrue( version_compare( $wp_rc10, $wp_rc, '>' ) );
+	}
+
+	public function test_debian_prerelease_does_not_satisfy_stable_minimum(): void {
+		$runtime = RuntimeVersion::php( '8.5.0~alpha4-1' );
+		self::assertIsString( $runtime );
+		self::assertFalse( version_compare( $runtime, '8.5.0', '>=' ) );
 	}
 }

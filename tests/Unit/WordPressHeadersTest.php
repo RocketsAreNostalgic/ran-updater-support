@@ -64,6 +64,16 @@ final class WordPressHeadersTest extends TestCase {
 		);
 	}
 
+	public function test_compact_opening_tag_keeps_duplicate_header(): void {
+		self::assertSame(
+			array( 'Name' => array( 'Compact', 'Standard' ) ),
+			WordPressHeaders::parse(
+				"<?php/** Plugin Name: Compact */\nPlugin Name: Standard",
+				array( 'Name' => 'Plugin Name' )
+			)
+		);
+	}
+
 	public function test_header_window_counts_raw_bytes_including_bom(): void {
 		$header  = 'Version:1';
 		$padding = "\xef\xbb\xbf" . str_repeat( 'x', WordPressHeaders::MAX_BYTES - strlen( $header ) - 5 ) . "\r\n";
