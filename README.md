@@ -1,6 +1,6 @@
 # RAN Updater Support
 
-`ran/updater-support` provides shared archive, failure-text, and local file primitives for RAN updater packages. The library supports PHP 8.2 and later 8.x releases without WordPress. Archive policy evaluates the metadata supplied by the caller.
+`ran/updater-support` provides shared archive, failure-text, local file, Git named-reference, and webhook-authority primitives for RAN updater packages. The library supports PHP 8.2 and later 8.x releases without WordPress. Archive policy evaluates the metadata supplied by the caller.
 
 `ArchiveSafety::path_failure()` validates ASCII relative paths by default, with one optional trailing slash. It can also validate UTF-8 paths when explicitly enabled. It rejects control and format characters, line and paragraph separators, traversal, empty components, Windows-reserved names, unsafe punctuation, trailing spaces or dots, and paths or components over the documented byte limits.
 

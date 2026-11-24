@@ -281,11 +281,36 @@ final class WebhookAuthorityMatcherTest extends TestCase {
 		);
 	}
 
+	public function test_matches_core_signed_webhook_profile_row_shape_with_extra_id_key(): void {
+		$profiles = array(
+			array(
+				'id'           => 'whp_owner_1',
+				'scope'        => 'owner',
+				'target'       => 'acme',
+				'authority_id' => '',
+			),
+			array(
+				'id'           => 'whp_repo_2',
+				'scope'        => 'repository',
+				'target'       => 'other/plugin',
+				'authority_id' => 'repo-authority-99',
+			),
+		);
+
+		self::assertTrue( WebhookAuthorityMatcher::matches_authorized_profiles( $profiles, 'repo-authority-1', 'acme/plugin' ) );
+		self::assertTrue( WebhookAuthorityMatcher::matches_authorized_profiles( $profiles, 'repo-authority-99', 'renamed/plugin' ) );
+		self::assertFalse( WebhookAuthorityMatcher::matches_authorized_profiles( $profiles, 'repo-authority-unknown', 'other/plugin' ) );
+	}
+
 	public function test_executes_standalone_without_wordpress_or_core_symbols(): void {
 		self::assertFalse( defined( 'ABSPATH' ) );
 		self::assertFalse( function_exists( 'add_action' ) );
 		self::assertFalse( class_exists( 'RAN\\RepositoryProvider\\GitReferenceSyntax', false ) );
-		self::assertFalse( class_exists( 'RAN\\Booster\\Webhook\\WebhookPolicy', false ) );
+		self::assertFalse( interface_exists( 'RAN\\RepositoryProvider\\ProviderWebhookPolicy', false ) );
+		self::assertFalse( class_exists( 'RAN\\RepositoryProvider\\ProviderWebhookPolicy', false ) );
+		self::assertFalse( class_exists( 'RAN\\RepositoryProvider\\SignedWebhookVerification', false ) );
+		self::assertFalse( class_exists( 'RAN\\BoosterGitHubProvider\\V1\\WebhookPolicy', false ) );
+		self::assertFalse( class_exists( 'RAN\\Booster\\Bitbucket\\BitbucketWebhookPolicy', false ) );
 
 		self::assertTrue( GitReferenceSyntax::is_valid_named_reference( 'release/v1.0.0' ) );
 		self::assertTrue(
