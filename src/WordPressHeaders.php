@@ -12,11 +12,10 @@ final class WordPressHeaders {
 	/**
 	 * Read and parse one local header file on demand, up to MAX_BYTES.
 	 *
-	 * An unavailable or non-regular file yields null, as does a change in
-	 * observed file identity or a read that ends before the header window
-	 * declared by the opened file. A readable file without matching headers yields
-	 * an empty array. The caller resolves the installed path and enforces
-	 * containment and package identity before calling.
+	 * An unavailable, non-regular, or unreadable file yields null. A readable
+	 * file without matching headers yields an empty array. The caller resolves
+	 * the installed path and enforces containment and package identity before
+	 * calling.
 	 *
 	 * @param string                $path   Resolved local header file.
 	 * @param array<string, string> $labels Result keys mapped to their on-disk labels.
@@ -24,57 +23,25 @@ final class WordPressHeaders {
 	 * @return array<string, non-empty-list<string>>|null
 	 */
 	public static function read( string $path, array $labels ): ?array {
-		$before = RegularFileStat::read( $path );
-		if ( null === $before ) {
+		if ( null === RegularFileStat::read( $path ) ) {
 			return null;
 		}
 
-		// The "n" mode flag adds O_NONBLOCK where the platform defines it. A path
-		// swapped for a FIFO or device after the lstat() then opens without
-		// waiting, and fstat() rejects it. Reads from a regular file are unaffected.
-		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Open one local read-only handle for identity checks and the bounded read. An unavailable file yields null.
-		$handle = @fopen( $path, 'rbn' );
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Open one local read-only handle for the bounded header read. An unavailable file yields null.
+		$handle = @fopen( $path, 'rb' );
 		if ( false === $handle ) {
 			return null;
 		}
+
 		try {
-			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- An unavailable handle snapshot yields null.
-			$opened = @fstat( $handle );
-			if ( false === $opened || 0100000 !== ( $opened['mode'] & 0170000 ) || ! self::same_identity( $before, $opened ) ) {
-				return null;
-			}
-
-			// Read the whole window the opened file declares. A failed, short or
-			// early-ending read yields null, never a partial header block.
-			$remaining = min( self::MAX_BYTES, $opened['size'] );
-			$contents  = '';
-			while ( $remaining > 0 ) {
-				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_fread -- Read only the header window from the checked handle. A read failure yields null.
-				$chunk = @fread( $handle, $remaining );
-				if ( false === $chunk || '' === $chunk ) {
-					return null;
-				}
-				$contents  .= $chunk;
-				$remaining -= strlen( $chunk );
-			}
-
-			$after = RegularFileStat::read( $path );
-			return null !== $after && self::same_identity( $opened, $after ) ? self::parse( $contents, $labels ) : null;
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_fread -- Read only the header window from the local handle. A read failure yields null.
+			$contents = @fread( $handle, self::MAX_BYTES );
 		} finally {
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Release the same local handle on every exit.
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Release the local handle on every exit.
 			fclose( $handle );
 		}
-	}
 
-	/**
-	 * @param array{dev:int,ino:int,size:int,mtime:int,ctime:int} $left  File snapshot.
-	 * @param array{dev:int,ino:int,size:int,mtime:int,ctime:int} $right File snapshot.
-	 */
-	private static function same_identity( array $left, array $right ): bool {
-		return $left['dev'] === $right['dev'] && $left['ino'] === $right['ino']
-			&& ( 0 !== $left['ino'] || (
-				$left['size'] === $right['size'] && $left['mtime'] === $right['mtime'] && $left['ctime'] === $right['ctime']
-			) );
+		return false === $contents ? null : self::parse( $contents, $labels );
 	}
 
 	/**
