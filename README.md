@@ -1,6 +1,6 @@
 # RAN Updater Support
 
-`ran/updater-support` provides shared archive, failure-text, and local file primitives for RAN updater packages. The library supports PHP 8.2 and later 8.x releases without WordPress. Archive policy evaluates the metadata supplied by the caller.
+`ran/updater-support` provides shared archive, failure-text, local file, Git named-reference, and webhook-authority primitives for RAN updater packages. The library supports PHP 8.2 and later 8.x releases without WordPress. Archive policy evaluates the metadata supplied by the caller.
 
 `ArchiveSafety::path_failure()` validates ASCII relative paths by default, with one optional trailing slash. It can also validate UTF-8 paths when explicitly enabled. It rejects control and format characters, line and paragraph separators, traversal, empty components, Windows-reserved names, unsafe punctuation, trailing spaces or dots, and paths or components over the documented byte limits.
 
@@ -303,6 +303,60 @@ over a name corpus with case variants.
   directory, final-component symlink or stream-wrapper URI yields `null`.
   Callers govern ancestor containment, permissions, link counts, digest checks,
   repeat observations and cleanup.
+
+## Git references and webhook authority matching
+
+`GitReferenceSyntax` and `WebhookAuthorityMatcher` provide stateless validation
+and profile-matching primitives with no WordPress, Core, credential, or
+provider-object dependencies.
+
+- **`GitReferenceSyntax::is_valid_named_reference($reference)`** validates a
+  named Git branch or tag reference against Git ref-format syntax and product
+  bounds: non-empty, no leading or trailing whitespace, at most 255 bytes, not
+  `@`, no leading `-` or `/`, no trailing `/` or `.`, no `..`, `@{`, or `//`,
+  no ASCII control/space/`DEL` bytes or `~ ^ : ? * [ \ %`, and no empty,
+  dot-prefixed, or ASCII case-insensitive `.lock` slash-separated segments.
+- **`WebhookAuthorityMatcher::matches_authorized_profiles($profiles, $repository_authority_id, $repository)`**
+  matches a webhook delivery's repository authority ID and repository locator
+  against non-secret profile rows (`scope`, `target`, `authority_id`). It fails
+  closed when `$repository_authority_id` is empty and skips malformed rows or
+  rows missing string `scope`, `target`, or `authority_id` keys. Owner-scope
+  profiles compare the trimmed, lower-cased `target` against the repository's
+  owner segment; repository-scope profiles compare a non-empty `authority_id`
+  with `hash_equals()`.
+- **`WebhookAuthorityMatcher::repository_target_matches($target, $repository_locator)`**
+  compares a configured repository target against a repository locator after
+  trimming leading and trailing slashes, ignoring ASCII case.
+
+Security boundary: callers **must** verify provider identity and webhook
+authenticity before calling `WebhookAuthorityMatcher` and pass only non-secret
+canonical profile metadata (`scope`, `target`, `authority_id`).
+
+```php
+use RAN\UpdaterSupport\V1\GitReferenceSyntax;
+use RAN\UpdaterSupport\V1\WebhookAuthorityMatcher;
+
+$valid_ref = GitReferenceSyntax::is_valid_named_reference( 'release/v1.2.3' ); // true
+
+$authorized = WebhookAuthorityMatcher::matches_authorized_profiles(
+	array(
+		array(
+			'scope'        => 'owner',
+			'target'       => 'acme',
+			'authority_id' => '',
+		),
+		array(
+			'scope'        => 'repository',
+			'target'       => 'acme/plugin',
+			'authority_id' => 'repo-authority-123',
+		),
+	),
+	'repo-authority-123',
+	'acme/plugin'
+);
+
+$same_locator = WebhookAuthorityMatcher::repository_target_matches( '/Acme/Plugin/', 'acme/plugin' ); // true
+```
 
 ## Failure text
 
