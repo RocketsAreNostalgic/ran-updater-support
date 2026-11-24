@@ -262,14 +262,12 @@ over a name corpus with case variants.
   comment prefixes and terminators, including a compact `<?php/**` opening.
   Callers decide which fields are required, how to handle duplicates, and what
   values to admit.
-- **`WordPressHeaders::read($path, $labels)`** reads up to 8 KiB from one local
-  read-only handle, opened without waiting on a FIFO or device. It checks that
-  the pathname identifies the opened regular file before and after the read.
-  An unavailable file, a non-regular file, a detected change in identity, or a
-  read that fails or ends before the header window the opened file declares
-  returns `null`. A readable file with no matching labels
-  returns an empty array. The caller resolves the installed file and checks
-  containment and package identity.
+- **`WordPressHeaders::read($path, $labels)`** verifies that the pathname
+  identifies a local regular file and reads up to 8 KiB from one local
+  read-only handle. An unavailable, non-regular, or unreadable file returns
+  `null`. A readable file with no matching labels returns an empty array. The
+  caller resolves the installed file and checks containment and package
+  identity.
 - **`TemporaryArchive::with_archive($allocate, $acquire, $consume, $limit, $sha256, $size)`**
   scopes a local archive to one synchronous operation. The allocator supplies a
   fresh empty file in a trusted directory, such as a path from `wp_tempnam()`
