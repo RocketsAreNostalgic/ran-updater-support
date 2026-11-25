@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-beta.12](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v1.0.0-beta.11...v1.0.0-beta.12) (2026-11-25)
+
+
+### Features
+
+* **rules:** add GitReferenceSyntax and WebhookAuthorityMatcher ([#89](https://github.com/RocketsAreNostalgic/ran-updater-support/issues/89)) ([a0e202f](https://github.com/RocketsAreNostalgic/ran-updater-support/commit/a0e202f7174e195f99e3fd9a270ec4d4da7bef65))
+
 ## [1.0.0-beta.11](https://github.com/RocketsAreNostalgic/ran-updater-support/compare/v1.0.0-beta.10...v1.0.0-beta.11) (2026-11-23)
 
 
