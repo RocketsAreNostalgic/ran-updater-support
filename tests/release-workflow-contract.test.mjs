@@ -32,6 +32,7 @@ test("release workflow is a thin pinned Profile A caller", () => {
   assert.doesNotMatch(workflow, /release-publisher/);
   assert.doesNotMatch(workflow, /autorelease:/);
   assert.equal(releaseConfig.packages["."]["skip-github-release"], undefined);
+  assert.equal(releaseConfig["always-update"], true);
 });
 
 test("canonical CI supports input-free exact-head candidate dispatch", () => {
